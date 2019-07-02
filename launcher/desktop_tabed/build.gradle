@@ -1,0 +1,57 @@
+apply plugin: 'java'
+
+configurations { natives }
+
+
+repositories {
+    flatDir {
+        dirs "./libs"
+    }
+
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+    natives ":libPP-platform-0.9.0-SNAPSHOT-natives-desktop:"
+}
+
+
+dependencies {
+    implementation project(':desktop')
+}
+
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+sourceSets.main.java.srcDirs = [ "src/" ]
+
+project.ext.mainClassName = "de.longri.cachebox3.desktop.touch.MouseLauncher"
+project.ext.assetsDir = new File("workingDir")
+
+task run(dependsOn: classes, type: JavaExec) {
+    main = project.mainClassName
+    classpath = sourceSets.main.runtimeClasspath
+    standardInput = System.in
+    workingDir = project.assetsDir
+    ignoreExitValue = true
+}
+
+
+task launcherJar(type: Jar, dependsOn: classes) {
+    classifier = 'launcher'
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/*.DSA', 'META-INF/*.RSA', 'META-INF/*.SF'
+    manifest {
+        attributes('Main-Class': 'de.longri.cachebox3.desktop.touch.MouseLauncher')
+    }
+    with jar
+}
+
+task copyAssets(type: Copy) {
+    from("../android/assets")
+    into("./workingDir")
+}
+
+
+tasks.withType(JavaCompile) {
+    compileTask -> compileTask.dependsOn copyAssets
+}
