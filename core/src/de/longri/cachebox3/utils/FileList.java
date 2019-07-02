@@ -20,11 +20,9 @@ import com.badlogic.gdx.utils.Array;
 import de.longri.cachebox3.Utils;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.Comparator;
 
 public class FileList extends Array<File> implements Comparator<File> {
-    private static final long serialVersionUID = 2454564654L;
 
     public FileList(String path, String extension) {
         ini(path, extension, false);
@@ -41,7 +39,7 @@ public class FileList extends Array<File> implements Comparator<File> {
         if (!(files == null)) {
             if (files.length > 0) {
                 for (String file : files) {
-                    if (Utils.GetFileExtension(file).equalsIgnoreCase(extension)) {
+                    if (Utils.getFileExtension(file).equalsIgnoreCase(extension)) {
                         File newfile = new File(absolutePath + file);
                         this.add(newfile);
                     }

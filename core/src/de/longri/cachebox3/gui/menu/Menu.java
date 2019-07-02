@@ -21,6 +21,7 @@ import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.math.Interpolation;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.actions.Actions;
@@ -33,86 +34,179 @@ import com.kotcrab.vis.ui.VisUI;
 import com.kotcrab.vis.ui.widget.VisLabel;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.gui.Window;
-import de.longri.cachebox3.gui.stages.StageManager;
-import de.longri.cachebox3.gui.views.listview.Adapter;
-import de.longri.cachebox3.gui.views.listview.ListView;
-import de.longri.cachebox3.gui.views.listview.ListViewItem;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import de.longri.cachebox3.gui.utils.ClickLongClickListener;
+import de.longri.cachebox3.gui.widgets.list_view.ListView;
+import de.longri.cachebox3.gui.widgets.list_view.ListViewAdapter;
+import de.longri.cachebox3.gui.widgets.list_view.ListViewItem;
 import de.longri.cachebox3.translation.Translation;
 import de.longri.cachebox3.utils.lists.CB_List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.badlogic.gdx.scenes.scene2d.actions.Actions.sequence;
+import static de.longri.cachebox3.gui.widgets.list_view.ListViewType.VERTICAL;
 
 /**
  * Created by Longri on 13.08.16.
  */
 public class Menu extends Window {
+    public final static float MORE_MENU_ANIMATION_TIME = 0.3f;
     final static Logger log = LoggerFactory.getLogger(Menu.class);
     final static boolean ALL = true;
-    public final static float MORE_MENU_ANIMATION_TIME = 0.3f;
-
-    CB_List<ListViewItem> mItems = new CB_List();
-    MenuStyle style;
-    final String name;
-    ListView listView;
-    OnItemClickListener onItemClickListener;
-    private VisLabel titleLabel, parentTitleLabel;
+    final CharSequence name;
+    public MenuStyle style;
+    protected ListView listView;
     protected Menu parentMenu;
+    protected boolean hideWithItemClick;
+    CB_List<ListViewItem> mItems = new CB_List();
+    OnItemClickListener onItemClickListener;
+    private Menu compoundMenu;
+    private VisLabel titleLabel, parentTitleLabel;
     private WidgetGroup titleGroup;
+    private WidgetGroup mainMenuWidgetGroup;
+    private boolean isShowing = false;
+    private OnHideListener onHideListener;
+    private final ClickListener backClickListener = new ClickListener() {
+        public void clicked(InputEvent event, float x, float y) {
+            hide(false);
+            CB.stageManager.unRegisterForBackKey(this);
+        }
+    };
 
-    public Menu(String name) {
-        super(name);
+    public Menu(CharSequence name) {
+        super(name.toString());
         this.style = VisUI.getSkin().get("default", MenuStyle.class);
         this.name = name;
         this.setStageBackground(style.stageBackground);
+        hideWithItemClick = true;
     }
 
-    public Menu(String name, MenuStyle style) {
-        super(name);
+    public Menu(CharSequence name, MenuStyle style) {
+        super(name.toString());
         this.style = style;
         this.name = name;
         this.setStageBackground(style.stageBackground);
+        hideWithItemClick = true;
     }
 
-    public Menu(String name, String styleName) {
+    public Menu(CharSequence name, String styleName) {
         this(name, VisUI.getSkin().get(styleName, MenuStyle.class));
     }
 
-    public MenuItem addItem(int ID, String StringId, Drawable icon) {
-        MenuItem item = addItem(ID, StringId);
+    public void setCompoundMenu(Menu compoundMenu) {
+        this.compoundMenu = compoundMenu;
+    }
+
+    public void setHideWithItemClick(boolean heideWithItemClick) {
+        this.hideWithItemClick = heideWithItemClick;
+    }
+
+    public MenuItem addMenuItem(CharSequence titleTranlationId, String titleExtension, boolean withoutTranslation, Drawable icon, ClickListener clickListener) {
+        MenuItem item = new MenuItem(0, 738, "Menu Item@" + titleTranlationId.toString() + "[" + "" + "]", this);
+        if (titleTranlationId.length() == 0) withoutTranslation = true;
+        item.setTitle((withoutTranslation ? titleTranlationId : Translation.get(titleTranlationId.toString())) + titleExtension);
         if (icon != null)
             item.setIcon(icon);
+        item.addListener(clickListener);
+        mItems.add(item);
         return item;
     }
 
-    public void addItem(MenuItem menuItem) {
+    private MenuItem addMenuItem(CharSequence titleTranlationId, String titleExtension, boolean withoutTranslation, Drawable icon, Runnable runnable) {
+        MenuItem item = new MenuItem(0, 738, "Menu Item@" + titleTranlationId.toString() + "[" + "" + "]", this);
+        if (titleTranlationId.length() == 0) withoutTranslation = true;
+        item.setTitle((withoutTranslation ? titleTranlationId : Translation.get(titleTranlationId.toString())) + titleExtension);
+        if (icon != null)
+            item.setIcon(icon);
+        item.addListener(new ClickListener() {
+            public void clicked(InputEvent event, float x, float y) {
+                if (mustHandle(event)) {
+                    runnable.run();
+                }
+            }
+        });
+        mItems.add(item);
+        return item;
+    }
+
+    public MenuItem addMenuItem(CharSequence titleTranlationId, String titleExtension, Drawable icon, Runnable runnable) {
+        return addMenuItem(titleTranlationId, titleExtension, false, icon, runnable);
+    }
+
+    public MenuItem addMenuItem(CharSequence titleTranlationId, Drawable icon, Runnable runnable) {
+        return addMenuItem(titleTranlationId, "", false, icon, runnable);
+    }
+
+    public MenuItem addCheckableMenuItem(CharSequence titleTranlationId, boolean checked, boolean withoutTranslation, Runnable runnable) {
+        MenuItem item = addMenuItem(titleTranlationId, "", withoutTranslation, null, runnable);
+        item.setCheckable(true);
+        item.setChecked(checked);
+        return item;
+    }
+
+    public MenuItem addCheckableMenuItem(CharSequence titleTranlationId, boolean checked, Runnable runnable) {
+        return addCheckableMenuItem(titleTranlationId, checked, false, runnable);
+    }
+
+    public void addItem(final MenuItem menuItem) {
+
+        menuItem.addListener(new ClickLongClickListener() {
+            @Override
+            public boolean clicked(InputEvent event, float x, float y) {
+                if (event.isHandled() || event.isCancelled()) return true;
+
+                // if the clicked item disabled, ignore click event!
+                if (!menuItem.mIsEnabled) {
+                    //TODO toast message say's way is disabled
+                    // must implement a property for text
+
+                    CB.viewmanager.toast("Item is disabled");
+                    return true;
+                }
+
+
+                // have the clicked item a moreMenu, just show it
+                if (menuItem.hasMoreMenu()) {
+                    menuItem.getMoreMenu(Menu.this.compoundMenu != null ? Menu.this.compoundMenu : Menu.this).show();
+                    return true;
+                }
+                //close Menu with sub menu's
+                if (hideWithItemClick) hide(ALL);
+                return onItemClickListener.onItemClick(menuItem);
+            }
+
+            @Override
+            public boolean longClicked(Actor actor, float x, float y, float touchDownStageX, float touchDownStageY) {
+                return false;
+            }
+        });
+
         mItems.add(menuItem);
     }
 
-    public MenuItem addItem(int ID, String StringId) {
+    public MenuItem addItem(int ID, CharSequence StringId) {
         return addItem(ID, StringId, "", false);
     }
 
-    public MenuItem addItem(int ID, String StringId, boolean withoutTranslation) {
+    public MenuItem addItem(int ID, CharSequence StringId, boolean withoutTranslation) {
         return addItem(ID, StringId, "", withoutTranslation);
     }
 
-    public MenuItem addItem(int ID, String StringId, String appendix, Sprite icon) {
+    public MenuItem addItem(int ID, CharSequence StringId, String appendix, Sprite icon) {
         MenuItem item = addItem(ID, StringId, appendix);
         if (icon != null)
             item.setIcon(new SpriteDrawable(icon));
         return item;
     }
 
-    public MenuItem addItem(int ID, String StringId, String appendix, Drawable icon) {
+    public MenuItem addItem(int ID, CharSequence StringId, String appendix, Drawable icon) {
         MenuItem item = addItem(ID, StringId, appendix);
         if (icon != null)
             item.setIcon(icon);
         return item;
     }
 
-    public MenuItem addItem(int ID, String StringId, String appendix) {
+    public MenuItem addItem(int ID, CharSequence StringId, String appendix) {
         return addItem(ID, StringId, appendix, false);
     }
 
@@ -123,7 +217,7 @@ public class Menu extends Window {
         return item;
     }
 
-    public MenuItem addItem(int ID, String StringId, String appendix, boolean withoutTranslation) {
+    public MenuItem addItem(int ID, CharSequence StringId, String appendix, boolean withoutTranslation) {
         String trans;
         if (StringId == null || StringId.equals("")) {
             trans = appendix;
@@ -131,7 +225,7 @@ public class Menu extends Window {
             if (withoutTranslation)
                 trans = StringId + appendix;
             else
-                trans = Translation.Get(StringId) + appendix;
+                trans = Translation.get(StringId.toString()) + appendix;
         }
 
         MenuItem item = new MenuItem(0, ID, "Menu Item@" + ID + "[" + trans + "]", this);
@@ -141,8 +235,12 @@ public class Menu extends Window {
         return item;
     }
 
-    public MenuItem addCheckableItem(int ID, String StringId, boolean checked) {
-        MenuItem item = addItem(ID, StringId, "", false);
+    public MenuItem addCheckableItem(int ID, CharSequence StringId, boolean checked) {
+        return addCheckableItem(ID, StringId, checked, false);
+    }
+
+    public MenuItem addCheckableItem(int ID, CharSequence StringId, boolean checked, boolean withoutTranslation) {
+        MenuItem item = addItem(ID, StringId, "", withoutTranslation);
         item.setCheckable(true);
         item.setChecked(checked);
         return item;
@@ -153,35 +251,35 @@ public class Menu extends Window {
     }
 
     public void show() {
+        reorganizeListIndexes();
         initialLayout();
         showWidgetGroup();
         if (this.parentMenu != null) {
             showAsChild();
         }
         this.setTouchable(Touchable.enabled);
-        log.debug("Show menu: " + this.name);
+        CB.stageManager.registerForBackKey(backClickListener);
+        log.debug("show menu: " + this.name);
     }
-
-
-    protected WidgetGroup mainMenuWidgetGroup;
 
     private void showWidgetGroup() {
         clearActions();
         pack();
 
         mainMenuWidgetGroup = new WidgetGroup();
-        mainMenuWidgetGroup.setName(this.name);
+        mainMenuWidgetGroup.setName(this.name.toString());
         mainMenuWidgetGroup.setBounds(this.getX(), this.getY(), this.getWidth(), this.getHeight());
         mainMenuWidgetGroup.addActor(this);
 
         if (this.parentMenu == null) {
-            StageManager.showOnNewStage(mainMenuWidgetGroup);
+            showingStage = CB.stageManager.showOnNewStage(mainMenuWidgetGroup);
         } else {
-            StageManager.showOnActStage(mainMenuWidgetGroup);
+            showingStage = CB.stageManager.showOnActStage(mainMenuWidgetGroup);
         }
 
         if (this.parentMenu == null)
             addAction(sequence(Actions.alpha(0), Actions.fadeIn(CB.WINDOW_FADE_TIME, Interpolation.fade)));
+        isShowing = true;
     }
 
 
@@ -194,7 +292,9 @@ public class Menu extends Window {
 
         mainMenuWidgetGroup.setPosition(nextXPos, 0);
         mainMenuWidgetGroup.addAction(Actions.moveTo(0, 0, MORE_MENU_ANIMATION_TIME));
-        log.debug("Show child menu: " + this.name);
+        log.debug("show child menu: " + this.name);
+
+        isShowing = true;
     }
 
     public void hide() {
@@ -202,9 +302,14 @@ public class Menu extends Window {
     }
 
     public void hide(boolean all) {
+        if (this.onHideListener != null) {
+            this.onHideListener.onHide();
+        }
+        if (!isShowing) return;
         if (this.parentMenu != null) {
             if (all) {
-                StageManager.removeAllWithActStage();
+                CB.stageManager.removeAllWithActStage(showingStage);
+                CB.stageManager.unRegisterForBackKey(backClickListener);
             } else {
                 float nextXPos = Gdx.graphics.getWidth() + CB.scaledSizes.MARGIN;
                 mainMenuWidgetGroup.addAction(Actions.sequence(Actions.moveTo(0 + nextXPos, 0, MORE_MENU_ANIMATION_TIME), Actions.removeActor()));
@@ -212,10 +317,15 @@ public class Menu extends Window {
             }
         } else {
             super.hide();
+            CB.stageManager.unRegisterForBackKey(backClickListener);
         }
         log.debug("Hide menu: " + this.name);
+        isShowing = false;
     }
 
+    public void addOnHideListener(OnHideListener listener) {
+        this.onHideListener = listener;
+    }
 
     private void initialLayout() {
 
@@ -227,11 +337,7 @@ public class Menu extends Window {
 
         // add the titleLabel on top
         titleGroup = new WidgetGroup();
-        ClickListener backClickListener = new ClickListener() {
-            public void clicked(InputEvent event, float x, float y) {
-                hide(false);
-            }
-        };
+
 
         if (style.menu_back != null) {
             Image backImage = new Image(style.menu_back);
@@ -240,7 +346,14 @@ public class Menu extends Window {
             titleGroup.addActor(backImage);
         }
 
-        titleLabel = new VisLabel(this.name, "menu_title_act");
+        String title = getName(); // !!! name is here(local access) and in actor(public getter/setter)
+        if (title.length() > 0) {
+            if (title.startsWith("-"))
+                title = title.substring(1);
+            else
+                title = Translation.get(title).toString();
+        } else title = " ";
+        titleLabel = new VisLabel(title, "menu_title_act");
 
         if (parentMenu != null) {
             parentTitleLabel = new VisLabel(parentMenu.name, "menu_title_parent");
@@ -261,65 +374,50 @@ public class Menu extends Window {
         titleGroup.addListener(backClickListener);
 
         this.addActor(titleGroup);
-
-        final OnItemClickListener clickListener = new OnItemClickListener() {
+        this.reorganizeListIndexes();
+        listView = new ListView(VERTICAL, false);
+        CB.postOnNextGlThread(new Runnable() {
             @Override
-            public boolean onItemClick(final MenuItem item) {
+            public void run() {
+                listView.setAdapter(new ListViewAdapter() {
+                    @Override
+                    public int getCount() {
+                        return mItems.size;
+                    }
 
-                // have the clicked item a moreMenu, just show it
-                if (item.hasMoreMenu()) {
-                    item.getMoreMenu(Menu.this).show();
-                    return true;
-                }
-                //close Menu with sub menu's
-                hide(ALL);
-                return onItemClickListener.onItemClick(item);
+                    @Override
+                    public ListViewItem getView(int index) {
+                        return mItems.get(index);
+                    }
+
+                    @Override
+                    public void update(ListViewItem view) {
+
+                    }
+                });
             }
-        };
-
-
-        Adapter listViewAdapter = new Adapter() {
-            @Override
-            public int getCount() {
-                return mItems.size();
-            }
-
-            @Override
-            public ListViewItem getView(int index) {
-                MenuItem item = (MenuItem) mItems.get(index);
-                item.setOnItemClickListener(clickListener);
-                return item;
-            }
-
-            @Override
-            public void update(ListViewItem view) {
-
-            }
-
-            @Override
-            public float getItemSize(int index) {
-                return mItems.get(index).getHeight();
-            }
-        };
-        listView = new ListView(listViewAdapter);
+        });
         listView.setBackground(this.style.background);
         this.addActor(listView);
     }
 
     @Override
     public void pack() {
-        for (ListViewItem item : mItems) {
-            ((MenuItem) item).initial();
-            item.pack();
-        }
-
-
         super.pack();
-
         float maxListViewHeight = CB.scaledSizes.WINDOW_HEIGHT - (titleGroup.getHeight());
         listView.setBounds(((Gdx.graphics.getWidth() - CB.scaledSizes.WINDOW_WIDTH) / 2f), CB.scaledSizes.MARGIN,
                 CB.scaledSizes.WINDOW_WIDTH, maxListViewHeight);
-        listView.pack();
+
+        float itemWidth = listView.getWidth() - (Math.max(listView.style.padLeft, listView.style.pad) + Math.max(listView.style.padRight, listView.style.pad));
+
+        for (ListViewItem item : mItems) {
+            item.setPrefWidth(itemWidth);
+            item.setWidth(itemWidth);
+            ((MenuItem) item).initial();
+            item.layout();
+            item.pack();
+            item.layout();
+        }
     }
 
     public void setOnItemClickListener(OnItemClickListener onItemClickListener) {
@@ -339,28 +437,47 @@ public class Menu extends Window {
     }
 
     public void addDivider(int listIndex) {
-
         if (this.style.divider != null) {
-            MenuItem item = new MenuItem(listIndex, this);
-            item.overrideBackground(this.style.divider);
-            addItem(item);
+            addItem(new DividerItem(listIndex, this, this.style));
         }
-
-        log.debug("add Divider");
-        //TODO add divider item
     }
 
     public void reorganizeListIndexes() {
-        for (int i = 0; i < mItems.size(); i++) {
+        for (int i = 0; i < mItems.size; i++) {
             mItems.get(i).setNewIndex(i);
         }
+    }
+
+    public ListView getListview() {
+        if (listView == null) initialLayout();
+        return listView;
+    }
+
+    public boolean mustHandle(InputEvent event) {
+        if (event.isHandled()) {
+            return false;
+        } else {
+            event.cancel(); // to set event is handled, ...
+            MenuItem menuItem = (MenuItem) event.getListenerActor();
+            if (menuItem.hasMoreMenu()) {
+                menuItem.getMoreMenu(compoundMenu != null ? compoundMenu : this).show();
+                return false;
+            } else {
+                if (hideWithItemClick)
+                    hide(ALL);
+                return true;
+            }
+        }
+    }
+
+    public interface OnHideListener {
+        void onHide();
     }
 
     public static class MenuStyle {
         public BitmapFont font;
         public Color fontColor;
         public Drawable background, stageBackground, menu_back, menu_for, divider;
-
     }
 
 }

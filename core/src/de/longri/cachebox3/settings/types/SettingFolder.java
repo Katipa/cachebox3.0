@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2011-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
@@ -28,20 +28,27 @@ public class SettingFolder extends SettingLongString {
     }
 
     @Override
+    public void setValue(String value) {
+        super.setValue(value.replace(CB.WorkPath, "?"));
+    }
+
+    @Override
     public String getValue() {
-        return replacePathSaperator(value);
+        return replacePathSeparator(value);
     }
 
     @Override
     public String getDefaultValue() {
-        return replacePathSaperator(defaultValue);
+        return replacePathSeparator(defaultValue);
     }
 
-    private String replacePathSaperator(String rep) {
+    private String replacePathSeparator(String rep) {
         if (rep.startsWith("?")) {
-            rep = CB.WorkPath + System.getProperty("file.separator") + "Repositories" + rep.substring(1);
+            rep = CB.WorkPath + System.getProperty("file.separator") + rep.substring(2);
         }
+        rep = rep.replace("\\\\", System.getProperty("file.separator"));
         rep = rep.replace("\\", System.getProperty("file.separator"));
+        rep = rep.replace("//", System.getProperty("file.separator"));
         rep = rep.replace("/", System.getProperty("file.separator"));
         return rep;
     }

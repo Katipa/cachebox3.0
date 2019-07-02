@@ -16,6 +16,7 @@
 package de.longri.cachebox3.gui.skin.styles;
 
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import de.longri.cachebox3.CB;
 
 /**
  * Created by Longri on 27.01.17.
@@ -35,18 +36,17 @@ public class IconsStyle extends AbstractIconStyle {
     public Drawable GC_Live;
     public Drawable Close;
     public Drawable Help;
+    public Drawable ExpiredApiKey;
+    public Drawable Database;
 
-
-    public Drawable cm_icon;
-    public Drawable cm_icon_filterd;
 
     @Override
-    protected int getPrefWidth() {
-        return 0;
+    public int getPrefWidth() {
+        return CB.getScaledInt(51);
     }
 
     @Override
-    protected int getPrefHeight() {
-        return 0;
+    public int getPrefHeight() {
+        return CB.getScaledInt(51);
     }
 }

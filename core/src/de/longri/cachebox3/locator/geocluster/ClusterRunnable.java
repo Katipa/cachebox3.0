@@ -17,9 +17,9 @@ package de.longri.cachebox3.locator.geocluster;
 
 
 import com.badlogic.gdx.scenes.scene2d.ui.ClusteredList;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import de.longri.cachebox3.utils.lists.CancelRunable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by Longri on 21.12.16.
@@ -63,10 +63,10 @@ public class ClusterRunnable implements CancelRunable {
     @Override
     public void run() {
         log.debug("Runnable started with " + task);
-        int lastSize = workList.size();
+        int lastSize = workList.size;
         try {
             workList.clusterByDistance(distance, boundingBox, task, all);
-            log.debug(task + "from " + lastSize + " to " + workList.size() + "[" + workList.getAllSize() + "]");
+            log.debug(task + "from " + lastSize + " to " + workList.size + "[" + workList.getAllSize() + "]");
             callBack.callBack();
         } catch (Exception e) {
             log.error("Runnable exception", e);

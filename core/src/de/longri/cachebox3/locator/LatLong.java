@@ -14,29 +14,31 @@
  */
 package de.longri.cachebox3.locator;
 
-import java.io.Serializable;
-
 /**
  * A LatLong represents an immutable pair of latitude and longitude coordinates.
  */
-public class LatLong implements  Serializable {
-    private static final long serialVersionUID = 1L;
-
+public class LatLong {
 
     /**
      * The latitude coordinate of this LatLong in degrees.
      */
-    public final double latitude;
+    protected double latitude;
 
     /**
      * The longitude coordinate of this LatLong in degrees.
      */
-    public final double longitude;
+    protected double longitude;
 
+    protected int hash = 0;
 
     public LatLong(double latitude, double longitude) {
         this.latitude = latitude;
         this.longitude = longitude;
+    }
+
+    public LatLong(LatLong latLon) {
+        this.latitude = latLon.latitude;
+        this.longitude = latLon.longitude;
     }
 
 
@@ -56,6 +58,7 @@ public class LatLong implements  Serializable {
             return false;
         }
         LatLong other = (LatLong) obj;
+        if (other.hashCode() != this.hashCode()) return false;
         if (Double.doubleToLongBits(this.latitude) != Double.doubleToLongBits(other.latitude)) {
             return false;
         } else if (Double.doubleToLongBits(this.longitude) != Double.doubleToLongBits(other.longitude)) {
@@ -66,14 +69,16 @@ public class LatLong implements  Serializable {
 
     @Override
     public int hashCode() {
-        final int prime = 31;
+        if (hash != 0) return hash;
+        int prime = 31;
         int result = 1;
         long temp;
         temp = Double.doubleToLongBits(this.latitude);
         result = prime * result + (int) (temp ^ (temp >>> 32));
         temp = Double.doubleToLongBits(this.longitude);
         result = prime * result + (int) (temp ^ (temp >>> 32));
-        return result;
+        hash = result;
+        return hash;
     }
 
     @Override
@@ -82,10 +87,18 @@ public class LatLong implements  Serializable {
         stringBuilder.append("lat=");
         stringBuilder.append(String.format("%.4f", this.latitude));
         // stringBuilder.append(this.latitude);
-        stringBuilder.append(", long=");
+        stringBuilder.append(", lon=");
         stringBuilder.append(String.format("%.4f", this.longitude));
         // stringBuilder.append(this.longitude);
         return stringBuilder.toString();
+    }
+
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
+
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
     }
 
     public double getLatitude() {
@@ -94,6 +107,16 @@ public class LatLong implements  Serializable {
 
     public double getLongitude() {
         return this.longitude;
+    }
+
+    public LatLong copy() {
+        return new LatLong(this.latitude, this.longitude);
+    }
+
+    public void setLatLon(double latitude, double longitude) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.hash = 0;
     }
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016 - 2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -18,17 +18,19 @@ package de.longri.cachebox3.gui.widgets;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
-import com.badlogic.gdx.scenes.scene2d.ui.WidgetGroup;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import de.longri.cachebox3.CB;
+import de.longri.cachebox3.gui.widgets.catch_exception_widgets.Catch_WidgetGroup;
 
 import java.util.ArrayList;
 
 /**
  * Created by Longri on 24.07.16.
  */
-public class ButtonBar extends WidgetGroup {
+public class ButtonBar extends Catch_WidgetGroup {
 
+    private boolean needsLayout = true;
 
     public static class ButtonBarStyle {
         public Drawable background;
@@ -48,7 +50,12 @@ public class ButtonBar extends WidgetGroup {
     public void draw(Batch batch, float parentAlpha) {
         Color color = batch.getColor();
         batch.setColor(1, 1, 1, 1);
-        background.draw(batch, 0, 0, this.getWidth(), this.getHeight());
+
+
+        float drawableWidth = (background instanceof TextureRegionDrawable) ?
+                ((TextureRegionDrawable) background).getRegion().getRegionWidth() : getWidth();
+        float drawX = (getWidth() - drawableWidth) / 2;
+        background.draw(batch, drawX, 0, drawableWidth, getHeight());
         batch.setColor(color);
         super.draw(batch, parentAlpha);
     }
@@ -62,6 +69,7 @@ public class ButtonBar extends WidgetGroup {
     }
 
     public void layout() {
+        if (!needsLayout) return;
         float completeWidth = 0;
         for (Button button : buttonList) {
             completeWidth += button.getWidth();
@@ -73,14 +81,15 @@ public class ButtonBar extends WidgetGroup {
         this.clear();
         float xPos = margin;
         for (Button button : buttonList) {
-            button.setPosition(xPos, CB.scaledSizes.MARGIN_HALF);
+            button.setPosition(xPos, CB.scaledSizes.MARGIN_HALF / 2);
             this.addActor(button);
             xPos += button.getWidth() + margin;
         }
+        needsLayout = false;
     }
 
     public float getPrefHeight() {
-        return buttonList.get(0).getHeight() + CB.scaledSizes.MARGIN;
+        return buttonList.get(0).getHeight() + CB.scaledSizes.MARGIN_HALF;
     }
 
 }

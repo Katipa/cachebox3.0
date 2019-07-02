@@ -28,7 +28,14 @@
     <true/>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>UIBackgroundModes</key>
+        <array>
+            <string>audio</string>
+            <string>location</string>
+        </array>
     <key>UIStatusBarHidden</key>
+    <true/>
+    <key>UIFileSharingEnabled</key>
     <true/>
     <key>UIDeviceFamily</key>
     <array>
@@ -39,6 +46,8 @@
     <array>
         <string>armv7</string>
         <string>opengles-2</string>
+        <string>magnetometer</string>
+        <string>gps</string>
     </array>
     <key>UISupportedInterfaceOrientations</key>
     <array>
@@ -48,6 +57,11 @@
     <string>This will be used to obtain or track your location.</string>
     <key>NSLocationAlwaysUsageDescription</key>
     <string>This will be used to obtain or track your location.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+    </dict>
     <key>CFBundleIcons</key>
     <dict>
         <key>CFBundlePrimaryIcon</key>

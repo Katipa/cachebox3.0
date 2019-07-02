@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,13 @@ import com.kotcrab.vis.ui.widget.VisTextField;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.gui.ActivityBase;
 import de.longri.cachebox3.gui.widgets.NumPad;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import de.longri.cachebox3.translation.Translation;
 import de.longri.cachebox3.utils.exceptions.NotImplementedException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static com.badlogic.gdx.Input.Keys.*;
+import static de.longri.cachebox3.gui.widgets.NumPad.OptionalButton.*;
 
 /**
  * Created by Longri on 27.08.16.
@@ -59,11 +60,11 @@ public class NumericInput_Activity<T extends Number> extends ActivityBase {
         float width = Gdx.graphics.getWidth();
 
         if (value instanceof Integer) {
-            numPad = new NumPad(numPadKeyListener, width, NumPad.OptionalButton.OK, NumPad.OptionalButton.CANCEL);
+            numPad = new NumPad(numPadKeyListener, width, OK, CANCEL, DelBack);
         } else if (value instanceof Double) {
-            numPad = new NumPad(numPadKeyListener, width, NumPad.OptionalButton.OK, NumPad.OptionalButton.CANCEL);
+            numPad = new NumPad(numPadKeyListener, width, OK, CANCEL, DOT, DelBack);
         } else if (value instanceof Float) {
-            numPad = new NumPad(numPadKeyListener, width, NumPad.OptionalButton.OK, NumPad.OptionalButton.CANCEL);
+            numPad = new NumPad(numPadKeyListener, width, OK, CANCEL, DOT, DelBack);
         } else throw new NotImplementedException("Ilegal Number type");
 
         textField = new VisTextField(value.toString());
@@ -86,7 +87,7 @@ public class NumericInput_Activity<T extends Number> extends ActivityBase {
                     returnValue(retValue);
                     hide();
                 } catch (NumberFormatException e) {
-                   CB.viewmanager.toast(Translation.Get("wrongValue"));
+                    CB.viewmanager.toast(Translation.get("wrongValue"));
                 }
 
             } else if (keyValue.equals("C")) {

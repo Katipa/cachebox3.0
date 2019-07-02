@@ -1,44 +1,30 @@
-apply plugin: "java"
+apply plugin: 'java'
 
-sourceCompatibility = 1.8
-sourceSets.main.java.srcDirs = [ "src/" ]
+dependencies {
+    implementation project(":core")
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-project.ext.mainClassName = "ch.fhnw.imvs.gpssimulator.SimulaterMain";
+    // libgdx
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
 
-task run(dependsOn: classes, type: JavaExec) {
-    main = project.mainClassName
-    classpath = sourceSets.main.runtimeClasspath
-    standardInput = System.in
-      ignoreExitValue = true
+    implementation "com.badlogicgames.gdx:gdx-backend-headless:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+
+    implementation 'org.mapsforge:mapsforge-core:0.11.0'
+    implementation 'org.mapsforge:mapsforge-themes:0.11.0'
+    implementation 'org.mapsforge:mapsforge-map:0.11.0'
+    implementation 'org.mapsforge:mapsforge-map-reader:0.11.0'
+    implementation("org.mapsforge:mapsforge-map-awt:0.11.0")
+    implementation 'com.kitfox.svg:svg-salamander:1.0'
+    implementation 'net.sf.kxml:kxml2:2.3.0'
+
+
+    implementation "de.longri.slf4j-libgdx:slf4j-libgdx:$slf4jLibgdxVersion"
 }
 
-task dist(type: Jar) {
-    from files(sourceSets.main.output.classesDir)
-    from files(sourceSets.main.output.resourcesDir)
-    from {configurations.compile.collect {zipTree(it)}}
 
-    manifest {
-        attributes 'Main-Class': project.mainClassName
-    }
-}
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
 
-
-dist.dependsOn classes
-
-eclipse {
-    project {
-        name = appName + "-desktop-simulator"
-        linkedResource name: 'assets', type: '2', location: 'PARENT-1-PROJECT_LOC/android/assets'
-    }
-}
-
-task afterEclipseImport(description: "Post processing after project generation", group: "IDE") {
-  doLast {
-    def classpath = new XmlParser().parse(file(".classpath"))
-    new Node(classpath, "classpathentry", [ kind: 'src', path: 'assets' ]);
-    def writer = new FileWriter(file(".classpath"))
-    def printer = new XmlNodePrinter(new PrintWriter(writer))
-    printer.setPreserveWhitespace(true)
-    printer.print(classpath)
-  }
-}
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+sourceSets.main.java.srcDirs = ["src/"]

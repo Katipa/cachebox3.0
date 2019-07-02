@@ -16,11 +16,17 @@
 package de.longri.cachebox3.gui.views;
 
 import de.longri.cachebox3.gui.menu.Menu;
+import de.longri.serializable.BitStore;
 
 /**
  * Created by Longri on 14.09.2016.
  */
 public class NotesView extends AbstractView {
+
+    public NotesView(BitStore reader) {
+        super(reader);
+    }
+
     public NotesView() {
         super("NotesView");
     }
@@ -30,7 +36,16 @@ public class NotesView extends AbstractView {
 
     }
 
-    public Menu getContextMenu() {
-        return null; //TODO
+
+    //################### Context menu implementation ####################################
+    @Override
+    public boolean hasContextMenu() {
+        return false;
     }
+
+    @Override
+    public Menu getContextMenu() {
+        return null;
+    }
+
 }

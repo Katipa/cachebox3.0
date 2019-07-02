@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2007 by the University of Applied Sciences Northwestern Switzerland (FHNW)
- * 
+ *
  * This program can be redistributed or modified under the terms of the
  * GNU General Public License as published by the Free Software Foundation.
  * This program is distributed without any warranty or implied warranty
@@ -11,9 +11,19 @@
 
 package ch.fhnw.imvs.gpssimulator.data;
 
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.StringBuilder;
+import de.longri.cachebox3.CB;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class GPSData {
+
+    static Logger log = LoggerFactory.getLogger(GPSData.class);
+
 
     public enum Status {
         A, V
@@ -49,7 +59,8 @@ public final class GPSData {
     private static Orientation ew;
     private static double speed;
     private static double altitude;
-    private static int course;
+    private static double course;
+    private static double tilt;
     private static int satellites;
     private static int quality;
     private static FixType fixType; // 3: 3D-fix, 2: 2D-fix, 1: no-fix
@@ -78,23 +89,47 @@ public final class GPSData {
         fixType = FixType.FIX_3D;
     }
 
-    private static Vector<GPSDataListener> listeners = new Vector<GPSDataListener>();
+    private static Array<GPSDataListener> listeners = new Array<GPSDataListener>();
     private static boolean running = false;
 
     public static void addChangeListener(GPSDataListener listener) {
         listeners.add(listener);
     }
 
+    public static void removeChangeListener(GPSDataListener listener) {
+        listeners.removeValue(listener, true);
+    }
+
+
+    private static CoordinateGPS_Simulator lastCoord;
+
+    private static void notifyChange() {
+
+        CoordinateGPS_Simulator coord = new CoordinateGPS_Simulator(latitude, longitude, speed, altitude, course, quality, tilt);
+
+
+        for (int i = 0; i < listeners.size; i++) {
+            GPSDataListener l = listeners.get(i);
+            if (l != null) {
+                if (!l.getClass().getName().startsWith("ch.fhnw.imvs.gpssimulator")) {
+                    // Listener is extern so check if changed
+                    if (!coord.equals(lastCoord)) {
+                        log.debug("Gps data changed: " + coord.toString());
+                        l.valueChanged();
+                    }
+                } else {
+                    l.valueChanged();
+                }
+            }
+        }
+        lastCoord = coord;
+    }
+
+
     public static void start() {
         if (!running) {
             running = true;
             notifyChange();
-        }
-    }
-
-    private static void notifyChange() {
-        for (GPSDataListener l : listeners) {
-            l.valueChanged();
         }
     }
 
@@ -182,13 +217,24 @@ public final class GPSData {
         }
     }
 
-    public static int getCourse() {
+    public static double getCourse() {
         return course;
     }
 
-    public static void setCourse(int course) {
+    public static void setCourse(double course) {
         if (GPSData.course != course) {
             GPSData.course = course;
+            notifyChange();
+        }
+    }
+
+    public static double getTilt() {
+        return tilt;
+    }
+
+    public static void setTilt(double tilt) {
+        if (GPSData.tilt != tilt) {
+            GPSData.tilt = tilt;
             notifyChange();
         }
     }

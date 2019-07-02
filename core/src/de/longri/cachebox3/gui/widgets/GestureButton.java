@@ -21,23 +21,23 @@ import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.EventListener;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
-import com.badlogic.gdx.scenes.scene2d.utils.ActorGestureListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Array;
 import com.kotcrab.vis.ui.VisUI;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.gui.Window;
 import de.longri.cachebox3.gui.actions.AbstractAction;
-import de.longri.cachebox3.gui.actions.show_vies.Abstract_Action_ShowView;
+import de.longri.cachebox3.gui.actions.show_views.Abstract_Action_ShowView;
 import de.longri.cachebox3.gui.help.GestureHelp;
 import de.longri.cachebox3.gui.menu.Menu;
 import de.longri.cachebox3.gui.menu.MenuItem;
 import de.longri.cachebox3.gui.menu.OnItemClickListener;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import de.longri.cachebox3.gui.skin.styles.GestureButtonStyle;
+import de.longri.cachebox3.gui.stages.ViewManager;
+import de.longri.cachebox3.gui.utils.ClickLongClickListener;
 import de.longri.cachebox3.settings.Config;
-import de.longri.cachebox3.utils.CB_RectF;
-import de.longri.cachebox3.utils.SizeChangedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 
@@ -51,16 +51,15 @@ public class GestureButton extends Button {
 
 
     private static int idCounter = 0;
-    protected static Drawable menuDrawable;
-    protected static Drawable menuDrawableFiltered;
 
-    private GestureButtonStyle style;
+    private final GestureButtonStyle style, filterStyle;
     private final ArrayList<ActionButton> buttonActions;
     private final int ID;
-    private Abstract_Action_ShowView aktActionView;
+    public Abstract_Action_ShowView aktActionView;
     private boolean hasContextMenu;
     private GestureHelp gestureHelper;
     private Drawable gestureRightIcon, gestureUpIcon, gestureLeftIcon, gestureDownIcon;
+    private final ViewManager viewManager;
 
     public ArrayList<ActionButton> getButtonActions() {
         return buttonActions;
@@ -70,23 +69,29 @@ public class GestureButton extends Button {
         this.hasContextMenu = hasContextMenu;
     }
 
-    static public class GestureButtonStyle extends ButtonStyle {
-        public Drawable select;
-    }
-
-    public GestureButton(String styleName) {
+    public GestureButton(String styleName, ViewManager viewManager) {
         style = VisUI.getSkin().get(styleName, GestureButtonStyle.class);
         style.checked = style.select;
+
+        filterStyle = new GestureButtonStyle();
+        filterStyle.down = style.down;
+        filterStyle.checked = style.checked;
+        filterStyle.up = style.up;
+        if (style.downFiltered != null) filterStyle.down = style.downFiltered;
+        if (style.selectFilterd != null) filterStyle.checked = style.selectFilterd;
+        if (style.upFiltered != null) filterStyle.up = style.upFiltered;
+
+        this.viewManager = viewManager;
         this.setStyle(style);
         this.ID = idCounter++;
-        buttonActions = new ArrayList<ActionButton>();
+        buttonActions = new ArrayList<>();
 
         //remove all Listeners
         Array<EventListener> listeners = this.getListeners();
         for (EventListener listener : listeners) {
             this.removeListener(listener);
         }
-        this.addListener(gestureListener);
+        this.addCaptureListener(gestureListener);
         this.pack();
     }
 
@@ -144,13 +149,10 @@ public class GestureButton extends Button {
         }
     }
 
-
-    //TODO inital with longPressDuration from settings
-    //    ActorGestureListener(float halfTapSquareSize, float tapCountInterval, float longPressDuration, float maxFlingDelay)
-    ActorGestureListener gestureListener = new ActorGestureListener() {
+    ClickLongClickListener gestureListener = new ClickLongClickListener() {
 
         @Override
-        public void tap(InputEvent event, float x, float y, int count, int button) {
+        public boolean clicked(InputEvent event, float x, float y) {
             log.debug("on click");
 
 
@@ -168,7 +170,7 @@ public class GestureButton extends Button {
 
                                 // Menu zusammen stellen!
                                 // zuerst das View Context Menu
-                                Menu compoundMenu = new Menu("compoundMenu");
+                                final Menu compoundMenu = new Menu("");
 
                                 final OnItemClickListener bothListener[] = new OnItemClickListener[2];
                                 final OnItemClickListener bothItemClickListener = new OnItemClickListener() {
@@ -190,8 +192,10 @@ public class GestureButton extends Button {
                                 };
 
 
-                                Menu viewContextMenu = aktActionView.getContextMenu();
+                                final Menu viewContextMenu = aktActionView.getContextMenu();
                                 if (viewContextMenu != null) {
+                                    compoundMenu.setName(viewContextMenu.getName()); // for title translation
+                                    viewContextMenu.setCompoundMenu(compoundMenu);
                                     compoundMenu.addItems(viewContextMenu.getItems());
                                     bothListener[0] = viewContextMenu.getOnItemClickListeners();
 
@@ -201,13 +205,23 @@ public class GestureButton extends Button {
 
                                 Menu longClickMenu = getLongClickMenu();
                                 if (longClickMenu != null) {
+                                    longClickMenu.setCompoundMenu(compoundMenu);
                                     compoundMenu.addItems(longClickMenu.getItems());
                                     bothListener[1] = longClickMenu.getOnItemClickListeners();
                                 }
                                 compoundMenu.setOnItemClickListener(bothItemClickListener);
                                 compoundMenu.reorganizeListIndexes();
+
+                                Menu.OnHideListener onHideListener = new Menu.OnHideListener() {
+                                    @Override
+                                    public void onHide() {
+                                        compoundMenu.hide();
+                                    }
+                                };
+                                if (viewContextMenu != null) viewContextMenu.addOnHideListener(onHideListener);
+                                if (longClickMenu != null) longClickMenu.addOnHideListener(onHideListener);
                                 compoundMenu.show();
-                                return;
+                                return true;
                             }
                         }
                     }
@@ -219,6 +233,16 @@ public class GestureButton extends Button {
             for (ActionButton ba : buttonActions) {
                 if (ba.isDefaultAction()) {
                     AbstractAction action = ba.getAction();
+
+                    if (action instanceof Abstract_Action_ShowView) {
+                        //check if target view not actView
+                        Class clazz = ((Abstract_Action_ShowView) action).getViewClass();
+                        if (clazz.isAssignableFrom(CB.viewmanager.getActView().getClass())) {
+                            actionExecuted = false;
+                            break;
+                        }
+                    }
+
                     if (action != null) {
                         action.execute();
                         if (action instanceof Abstract_Action_ShowView)
@@ -231,14 +255,15 @@ public class GestureButton extends Button {
 
             // if no default action seted, show context-menu from view (like long click)
             if (!actionExecuted) {
-                longPress(event.getTarget(), x, y);
+                longPress(event.getTarget(), x, y, true);
             }
+            return true;
         }
 
         @Override
-        public boolean longPress(Actor actor, float x, float y) {
+        public boolean longClicked(Actor actor, float x, float y, float touchDownStageX, float touchDownStageY) {
             log.debug("onLongClick");
-            // GL_MsgBox.Show("Button " + Me.getName() + " recivet a LongClick Event");
+            // GL_MsgBox.show("Button " + Me.getName() + " recivet a LongClick Event");
             // Wenn diesem Button mehrere Actions zugeordnet sind dann wird nach einem Lang-Click ein Menü angezeigt aus dem eine dieser
             // Actions gewählt werden kann
 
@@ -287,11 +312,10 @@ public class GestureButton extends Button {
         }
     };
 
-
     private Menu getLongClickMenu() {
-        Menu cm = new Menu("Name");
+        Menu longClickMenu = new Menu("");
 
-        cm.setOnItemClickListener(new OnItemClickListener() {
+        longClickMenu.setOnItemClickListener(new OnItemClickListener() {
             @Override
             public boolean onItemClick(MenuItem item) {
                 int mId = item.getMenuItemId();
@@ -332,49 +356,52 @@ public class GestureButton extends Button {
 
         for (ActionButton ba : buttonActions) {
             AbstractAction action = ba.getAction();
-            if (action == null)
+            if (action == null || !action.getEnabled())
                 continue;
-            MenuItem mi = cm.addItem(action.getId(), action.getName(), action.getNameExtention());
+            MenuItem mi = longClickMenu.addItem(action.getId(), action.getName(), action.getNameExtention());
             mi.setEnabled(action.getEnabled());
             mi.setCheckable(action.getIsCheckable());
             mi.setChecked(action.getIsChecked());
             mi.setIcon(action.getIcon());
         }
-        return cm;
+        return longClickMenu;
     }
 
 
-    private static final CB_RectF menuIconDrawRec = new CB_RectF().add(new SizeChangedEvent() {
-        @Override
-        public void sizeChanged() {
-
-        }
-    });
+    private boolean isLastFiltered = false;
 
     public void draw(Batch batch, float parentAlpha) {
+
+        //check if filter changed
+        if (viewManager.isFilters() != isLastFiltered) {
+            if (viewManager.isFilters() && style.upFiltered != null) {
+                this.setStyle(filterStyle);
+            } else {
+                this.setStyle(style);
+            }
+            isLastFiltered = viewManager.isFilters();
+        }
+
         super.draw(batch, parentAlpha);
 
         if (hasContextMenu && isChecked()) {
 
-            // draw Menu Sprite
-            if (menuDrawable == null || menuDrawableFiltered == null) {
-                menuDrawable = CB.getSkin().getIcon.cm_icon; //TODO replace with GestureButtonStyle
-                menuDrawableFiltered = CB.getSkin().getIcon.cm_icon_filterd;
-            }
-
             Vector2 stagePos = new Vector2();
             this.localToStageCoordinates(stagePos);
-            menuIconDrawRec.setPos(stagePos.x, stagePos.y);
-            // menuIconDrawRec.setPos(this.getX(), this.getY());
 
-            boolean isFiltered = false; //TODO set filtered!
+            boolean isFiltered = viewManager.isFilters();
 
-            if (!isFiltered && menuDrawable != null)
-                menuDrawable.draw(batch, menuIconDrawRec.getX(), menuIconDrawRec.getY(),
-                        menuIconDrawRec.getWidth(), menuIconDrawRec.getHeight());
-            if (isFiltered && menuDrawableFiltered != null)
-                menuDrawableFiltered.draw(batch, menuIconDrawRec.getX(), menuIconDrawRec.getY(),
-                        menuIconDrawRec.getWidth(), menuIconDrawRec.getHeight());
+            if (!isFiltered && style.hasMenu != null) {
+                style.hasMenu.draw(batch, stagePos.x, stagePos.y, this.getWidth(), this.getHeight());
+            }
+
+            if (isFiltered && style.hasFilteredMenu != null) {
+                style.hasFilteredMenu.draw(batch, stagePos.x, stagePos.y, this.getWidth(), this.getHeight());
+            } else {
+                if (style.hasMenu != null) {
+                    style.hasMenu.draw(batch, stagePos.x, stagePos.y, this.getWidth(), this.getHeight());
+                }
+            }
         }
     }
 }

@@ -25,9 +25,7 @@ import de.longri.cachebox3.CB;
 import de.longri.cachebox3.develop.tools.skin_editor.SkinEditorGame;
 import de.longri.cachebox3.gui.map.layer.WaypointLayer;
 import de.longri.cachebox3.gui.skin.styles.MapWayPointItemStyle;
-import de.longri.cachebox3.types.Cache;
-import de.longri.cachebox3.types.CacheTypes;
-import de.longri.cachebox3.types.Waypoint;
+import de.longri.cachebox3.types.*;
 import org.oscim.backend.canvas.Bitmap;
 
 /**
@@ -84,57 +82,77 @@ public class Validate_MapWayPointItemStyle extends ValidationTask {
 
     private void checkCacheTypes() {
         //Check Cache, I'm the owner
-        Cache ownerCache = new Cache(0, 0, "test", CacheTypes.Cache, "GCCODE");
-        checkCache(ownerCache);
+        AbstractCache ownerAbstractCache = new MutableCache(0, 0, "test", CacheTypes.Cache, "GCCODE");
+        checkCache(ownerAbstractCache);
 
         //Check Cache, found
-        Cache foundCache = new Cache(0, 0, "test", CacheTypes.Cache, "GCCODE");
-        foundCache.setOwner("nicht meiner");
-        foundCache.setFound(true);
-        checkCache(foundCache);
+        AbstractCache foundAbstractCache = new MutableCache(0, 0, "test", CacheTypes.Cache, "GCCODE");
+        foundAbstractCache.setOwner("nicht meiner");
+        foundAbstractCache.setFound(true);
+        checkCache(foundAbstractCache);
 
         //Check Cache, solved
-        Cache solvedCache = new Cache(0, 0, "test", CacheTypes.Mystery, "GCCODE");
-        solvedCache.setOwner("nicht meiner");
-        solvedCache.setCorrectedCoordinates(true);
-        checkCache(solvedCache);
+        AbstractCache solvedAbstractCache = new MutableCache(0, 0, "test", CacheTypes.Mystery, "GCCODE");
+        solvedAbstractCache.setOwner("nicht meiner");
+        solvedAbstractCache.setHasCorrectedCoordinates(true);
+        checkCache(solvedAbstractCache);
 
 
         //Check Cache, multi start
-        Cache multiStartCache = new Cache(0, 0, "test", CacheTypes.Multi, "GCCODE");
-        multiStartCache.setOwner("nicht meiner");
-        Waypoint wp = new Waypoint(0, 0, false);
-        wp.IsStart = true;
-        multiStartCache.waypoints.add(wp);
-        checkCache(multiStartCache);
+        AbstractCache multiStartAbstractCache = new MutableCache(0, 0, "test", CacheTypes.Multi, "GCCODE");
+        multiStartAbstractCache.setOwner("nicht meiner");
+        AbstractWaypoint wp = new MutableWaypoint("wp", CacheTypes.MultiStage, 0, 0, 100, "");
+        wp.setStart(true);
+        multiStartAbstractCache.getWaypoints().add(wp);
+        checkCache(multiStartAbstractCache);
 
         //Check Cache, myst start
-        Cache mystStartCache = new Cache(0, 0, "test", CacheTypes.Mystery, "GCCODE");
-        mystStartCache.setOwner("nicht meiner");
-        Waypoint wpm = new Waypoint(0, 0, false);
-        wpm.IsStart = true;
-        mystStartCache.waypoints.add(wpm);
-        checkCache(mystStartCache);
+        AbstractCache mystStartAbstractCache = new MutableCache(0, 0, "test", CacheTypes.Mystery, "GCCODE");
+        mystStartAbstractCache.setOwner("nicht meiner");
+        MutableWaypoint wpm = new MutableWaypoint("wp", CacheTypes.MultiStage, 0, 0, 100, "");
+        wpm.setStart(true);
+        mystStartAbstractCache.getWaypoints().add(wpm);
+        checkCache(mystStartAbstractCache);
 
+
+        {// check multiStageStart
+            AbstractWaypoint wpMS = new MutableWaypoint("wp", CacheTypes.MultiStage, 0, 0, 100, "");
+            wpMS.setStart(true);
+
+            MapWayPointItemStyle style = null;
+            try {
+                style = WaypointLayer.getClusterSymbolsByWaypoint(wpMS);
+            } catch (GdxRuntimeException e) {
+            }
+            String styleName = WaypointLayer.getMapIconName(wpMS);
+
+            if (style == null) {
+                missingSyles.append(styleName);
+                missingSyles.append("\n");
+            } else {
+                checkBitmap(style.small, styleName, Size.small);
+                checkBitmap(style.middle, styleName, Size.middle);
+                checkBitmap(style.large, styleName, Size.large);
+            }
+        }
 
         for (CacheTypes type : CacheTypes.values()) {
-
             // create a Temp Cache
-            Cache cache = new Cache(0, 0, "test", type, "GCCODE");
-            cache.setOwner("nicht meiner");
-            checkCache(cache);
+            AbstractCache abstractCache = new MutableCache(0, 0, "test", type, "GCCODE");
+            abstractCache.setOwner("nicht meiner");
+            checkCache(abstractCache);
         }
     }
 
 
-    private void checkCache(Cache cache) {
+    private void checkCache(AbstractCache abstractCache) {
         MapWayPointItemStyle style = null;
         try {
-            style = WaypointLayer.getClusterSymbolsByCache(cache);
+            style = WaypointLayer.getClusterSymbolsByCache(abstractCache);
         } catch (GdxRuntimeException e) {
         }
 
-        String styleName = WaypointLayer.getMapIconName(cache);
+        String styleName = WaypointLayer.getMapIconName(abstractCache);
 
         if (style == null) {
             missingSyles.append(styleName);

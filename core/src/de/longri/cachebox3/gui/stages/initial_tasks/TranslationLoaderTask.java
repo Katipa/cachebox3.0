@@ -15,9 +15,18 @@
  */
 package de.longri.cachebox3.gui.stages.initial_tasks;
 
+import com.badlogic.gdx.Gdx;
+import de.longri.cachebox3.events.EventHandler;
+import de.longri.cachebox3.events.IncrementProgressEvent;
 import de.longri.cachebox3.settings.Config;
+import de.longri.cachebox3.translation.Language;
+import de.longri.cachebox3.translation.SequenceTranslationHandler;
 import de.longri.cachebox3.translation.Translation;
+import de.longri.cachebox3.translation.StringTranslationHandler;
 import de.longri.cachebox3.utils.IChanged;
+import de.longri.cachebox3.utils.SoundCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -26,34 +35,55 @@ import java.io.IOException;
  */
 public final class TranslationLoaderTask extends AbstractInitTask {
 
-    public TranslationLoaderTask(String name, int percent) {
-        super(name, percent);
+    private final static Logger log = LoggerFactory.getLogger(TranslationLoaderTask.class);
+
+    private Language loadedLang;
+
+    public TranslationLoaderTask(String name) {
+        super(name);
     }
 
     @Override
     public void runnable() {
-        new Translation("lang");
+//        Translation.translation = new StringTranslationHandler(Gdx.files.internal("lang"), "en-GB");
+        Translation.translation = new SequenceTranslationHandler(Gdx.files.internal("lang"), "en-GB");
 
+        EventHandler.fire(new IncrementProgressEvent(10, "Load Translation"));
         loadTranslation();
 
         // add settings change handler
-        Config.Sel_LanguagePath.addChangedEventListener(new IChanged() {
+        Config.localisation.addChangedEventListener(new IChanged() {
             @Override
             public void isChanged() {
                 loadTranslation();
             }
         });
+
+
+        //load sounds
+        SoundCache.loadSounds();
+
+    }
+
+    @Override
+    public int getProgressMax() {
+        return 10;
     }
 
     private void loadTranslation() {
+        if (Config.localisation.getEnumValue() == loadedLang) return;
         try {
-            Translation.LoadTranslation(Config.Sel_LanguagePath.getValue());
+            Translation.loadTranslation(Config.localisation.getEnumValue().toString());
+            loadedLang = Config.localisation.getEnumValue();
         } catch (Exception e) {
             try {
-                Translation.LoadTranslation(Config.Sel_LanguagePath.getDefaultValue());
+                log.error("can't load lang: {}", Config.localisation.getEnumValue(), e);
+                Translation.loadTranslation(Config.localisation.getEnumDefaultValue().toString());
+                loadedLang = Config.localisation.getEnumDefaultValue();
             } catch (IOException e1) {
-                e1.printStackTrace();
+                log.error("can't load default lang", e1);
             }
         }
+        log.debug("Loaded lang: {}", loadedLang);
     }
 }

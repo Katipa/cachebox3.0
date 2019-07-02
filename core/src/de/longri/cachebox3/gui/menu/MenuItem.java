@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2015-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
@@ -16,68 +16,40 @@
 package de.longri.cachebox3.gui.menu;
 
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.EventListener;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Scaling;
 import com.kotcrab.vis.ui.VisUI;
 import de.longri.cachebox3.CB;
-import de.longri.cachebox3.gui.views.listview.ListViewItem;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
-import de.longri.cachebox3.utils.SizeF;
+import de.longri.cachebox3.gui.widgets.list_view.ListViewItem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MenuItem extends ListViewItem {
     final static Logger log = LoggerFactory.getLogger(MenuItem.class);
-
-    private MenuItemStyle style;
-
     private final String name;
-    private Label mLabel;
-    private Image checkImage;
-    private Drawable mIcon;
-    private float imageScaleValue = 1;
-
-
-    private String mTitle;
-    private boolean mIsEnabled = true;
-
-    protected boolean mIsCheckable = false;
-    protected boolean mIsChecked = false;
-    protected boolean mLeft = false;
-
     private final int mID;
-
+    private final Menu parentMenu;
+    protected Label mLabel;
+    protected Image checkImage;
+    protected Drawable mIcon;
+    protected String mTitle;
+    protected boolean mIsEnabled = true;
+    protected boolean mIsChecked = false;
     protected boolean isPressed = false;
+    private MenuItemStyle style;
+    private boolean mIsCheckable = false;
+    private boolean mLeft = false;
     private Image iconImage;
     private Object data;
-
     private Menu moreMenu;
-    private final Menu parentMenu;
-
-    private OnItemClickListener onItemClickListener;
-
-    public void setOnItemClickListener(OnItemClickListener onItemClickListener) {
-        this.onItemClickListener = onItemClickListener;
-    }
-
-    ClickListener clickListener = new ClickListener() {
-        public void clicked(InputEvent event, float x, float y) {
-            if (MenuItem.this.onItemClickListener != null && event.getType() == InputEvent.Type.touchUp) {
-                MenuItem.this.onItemClickListener.onItemClick(MenuItem.this);
-            }
-        }
-    };
-
-    public MenuItem(SizeF size, int Index, int ID, String name, Menu parentMenu) {
-        super(Index);
-        this.name = name;
-        mID = ID;
-        this.parentMenu = parentMenu;
-        setDefaultStyle();
-    }
+    private boolean backgroundOverrides = false;
 
     public MenuItem(int Index, int ID, String name, Menu parentMenu) {
         super(Index);
@@ -87,13 +59,13 @@ public class MenuItem extends ListViewItem {
         setDefaultStyle();
     }
 
+
     public MenuItem(int Index, Menu parentMenu) {
         super(Index);
         mID = -1;
         name = "";
         this.parentMenu = parentMenu;
     }
-
 
     private void setDefaultStyle() {
         this.style = VisUI.getSkin().get("default", MenuItemStyle.class);
@@ -103,39 +75,65 @@ public class MenuItem extends ListViewItem {
         return mID;
     }
 
-    public void toggleCheck() {
-        if (isCheckable()) {
-            mIsChecked = !mIsChecked;
-            //  initial();
+    @Override
+    public void pack() {
+        // calc pref Label width
+        float prefLabelWidth = this.getWidth();
+        if (checkImage != null) {
+            prefLabelWidth -= checkImage.getWidth() + CB.scaledSizes.MARGINx2;
+        } else {
+            prefLabelWidth -= CB.scaledSizes.MARGIN;
         }
+        if (mIcon != null) {
+            prefLabelWidth -= mIcon.getMinWidth() + CB.scaledSizes.MARGINx2;
+        } else {
+            prefLabelWidth -= CB.scaledSizes.MARGIN;
+        }
+        // calc prefHeight
+        float prefHeight = 0;
+        if (checkImage != null) prefHeight = checkImage.getHeight();
+        if (mIcon != null) prefHeight = Math.max(prefHeight, mIcon.getMinHeight());
+        if (mLabel != null) {
+            mLabel.setWidth(prefLabelWidth);
+            mLabel.invalidate();
+            prefHeight = Math.max(prefHeight, mLabel.getPrefHeight());
+        }
+        prefHeight += CB.scaledSizes.MARGINx4;
+        this.setPrefHeight(prefHeight);
+        this.setHeight(prefHeight);
     }
 
     @Override
-    public void pack() {
-        try {
-            super.pack();
-            initial();
-        } catch (Exception e) {
-        }
-
+    public boolean addListener(EventListener listener) {
+        return super.addListener(listener);
     }
-
 
     protected synchronized void initial() {
         this.reset();
-        this.removeListener(clickListener);
-
 
         boolean hasIcon = (mIcon != null);
         if (hasIcon) {
-            Image iconImage = new Image(mIcon);
-            iconImage.setWidth(iconImage.getWidth() * imageScaleValue);
-            iconImage.setHeight(iconImage.getHeight() * imageScaleValue);
-            this.add(iconImage).width(iconImage.getWidth()).height(iconImage.getHeight()).center().padRight(CB.scaledSizes.MARGIN_HALF);
+            Image iconImage = new Image(mIcon, Scaling.none);
+            this.add(iconImage).center().padRight(CB.scaledSizes.MARGIN_HALF);
             if (!mIsEnabled) {
                 // TODO iconImage.setColor(COLOR.getDisableFontColor());
             }
         }
+
+        if (moreMenu != null && parentMenu.style.menu_for != null) {
+            checkImage = new Image(parentMenu.style.menu_for, Scaling.none);
+        } else if (mIsCheckable) { // ignore checkable hav this item a moreMenu
+            if (mIsChecked) {
+                if (mIsEnabled) {
+                    checkImage = new Image(new TextureRegionDrawable(CB.getSprite("check_on")), Scaling.none, Align.center);
+                } else {
+                    checkImage = new Image(new TextureRegionDrawable(CB.getSprite("check_disabled")), Scaling.none, Align.center);
+                }
+            } else {
+                checkImage = new Image(new TextureRegionDrawable(CB.getSprite("check_off")), Scaling.none, Align.center);
+            }
+        }
+
 
         if (mTitle != null) {
             mLabel = new Label(mTitle, new Label.LabelStyle(style.font, style.fontColor));
@@ -143,19 +141,7 @@ public class MenuItem extends ListViewItem {
             this.add(mLabel).expandX().fillX().padTop(CB.scaledSizes.MARGIN).padBottom(CB.scaledSizes.MARGIN);
         }
 
-        if (moreMenu != null && parentMenu.style.menu_for != null) {
-            checkImage = new Image(parentMenu.style.menu_for);
-            this.add(checkImage).width(checkImage.getWidth()).pad(CB.scaledSizes.MARGIN / 2);
-        } else if (mIsCheckable) { // ignore checkable hav this item a moreMenu
-            if (mIsChecked) {
-                if (mIsEnabled) {
-                    checkImage = new Image(CB.getSprite("check_on"));
-                } else {
-                    checkImage = new Image(CB.getSprite("check_disabled"));
-                }
-            } else {
-                checkImage = new Image(CB.getSprite("check_off"));
-            }
+        if (checkImage != null) {
             this.add(checkImage).width(checkImage.getWidth()).pad(CB.scaledSizes.MARGIN / 2);
         }
 
@@ -163,22 +149,38 @@ public class MenuItem extends ListViewItem {
         if (!mIsEnabled) {
             //TODO
         }
-
-
-        this.addListener(clickListener);
     }
 
+    @Override
+    public void draw(Batch batch, float parentAlpha) {
+        if (mLabel != null && mLabel.getHeight() > this.getHeight()) {
+            this.setHeight(mLabel.getHeight() + CB.scaledSizes.MARGINx4);
+            if (parentMenu != null && parentMenu.listView != null) {
+                parentMenu.listView.invalidate();
+                parentMenu.listView.layout();
+            }
+        }
 
-    /**
-     * Change the title associated with this item.
-     *
-     * @param title The new text to be displayed.
-     * @return This Item so additional setters can be called.
-     */
-    public MenuItem setTitle(String title) {
-        mTitle = title;
-        //  initial();
-        return this;
+        // set alpha if item disabled
+        if (!this.mIsEnabled)
+            parentAlpha *= 0.25f;
+
+        super.draw(batch, parentAlpha);
+    }
+
+    protected void drawBackground(Batch batch, float parentAlpha, float x, float y) {
+
+        Drawable background = this.getBackground();
+
+        if (background == null) return;
+        Color color = getColor();
+
+        // restore alpha if item disabled, draw background never with alpha
+        if (!this.mIsEnabled)
+            parentAlpha *= 4f;
+
+        batch.setColor(color.r, color.g, color.b, color.a * parentAlpha);
+        background.draw(batch, x, y, getWidth(), getHeight());
     }
 
     /**
@@ -191,6 +193,18 @@ public class MenuItem extends ListViewItem {
     }
 
     /**
+     * Change the title associated with this item.
+     *
+     * @param title The new text to be displayed.
+     * @return This Item so additional setters can be called.
+     */
+    public MenuItem setTitle(String title) {
+        mTitle = title;
+        initial();
+        return this;
+    }
+
+    /**
      * Change the icon associated with this item. This icon will not always be shown, so the title should be sufficient in describing this
      * item. See {@link Menu} for the menu types that support icons.
      *
@@ -198,50 +212,41 @@ public class MenuItem extends ListViewItem {
      * @return This Item so additional setters can be called.
      */
     public MenuItem setIcon(Drawable icon) {
-        CB.scaledSizes.checkMaxIconSize();
-        if (icon != null && icon.getMinWidth() > CB.scaledSizes.ICON_HEIGHT) {
-            // set scaled icon size!
-            imageScaleValue = Math.min(CB.scaledSizes.ICON_WIDTH / icon.getMinWidth(), CB.scaledSizes.ICON_HEIGHT / icon.getMinHeight());
-            log.debug("Menu Icon size not otimal for item: " + this.getName() + "! Maby use scalefactor = " + imageScaleValue);
-        } else {
-            imageScaleValue = 1f;
-        }
         mIcon = icon;
+        initial();
         return this;
     }
 
-
-    public void setEnabled(boolean enabled) {
-        mIsEnabled = enabled;
-
-    }
-
-
     public boolean isEnabled() {
+        initial();
         return mIsEnabled;
     }
 
-    public void setCheckable(boolean isCheckable) {
-        mIsCheckable = isCheckable;
-
-    }
-
-    public void setChecked(boolean checked) {
-        mIsChecked = checked;
-
+    public void setEnabled(boolean enabled) {
+        mIsEnabled = enabled;
     }
 
     public boolean isChecked() {
         return mIsChecked;
     }
 
+    public void setChecked(boolean checked) {
+        mIsChecked = checked;
+        initial();
+    }
+
     public boolean isCheckable() {
         return mIsCheckable;
     }
 
+    public void setCheckable(boolean isCheckable) {
+        mIsCheckable = isCheckable;
+        initial();
+    }
+
     public void setLeft(boolean value) {
         mLeft = value;
-
+        initial();
     }
 
     @Override
@@ -249,17 +254,17 @@ public class MenuItem extends ListViewItem {
         return "MenuItem " + name;
     }
 
-    public void setData(Object data) {
-        this.data = data;
-    }
-
     public Object getData() {
         return this.data;
     }
 
+    public void setData(Object data) {
+        this.data = data;
+    }
 
     public void setMoreMenu(Menu moreMenu) {
         this.moreMenu = moreMenu;
+        initial();
     }
 
     public boolean hasMoreMenu() {
@@ -268,11 +273,14 @@ public class MenuItem extends ListViewItem {
 
     public Menu getMoreMenu(Menu menu) {
         this.moreMenu.parentMenu = menu;
+        this.moreMenu.reorganizeListIndexes();
         return this.moreMenu;
     }
 
-
-    private boolean backgroundOverrides = false;
+    @Override
+    public void setHeight(float height) {
+        super.setHeight(height);
+    }
 
     public void overrideBackground(Drawable drawable) {
         setBackground(drawable);
@@ -287,7 +295,6 @@ public class MenuItem extends ListViewItem {
 
     @Override
     public void dispose() {
-        clickListener = null;
         style = null;
         mLabel = null;
         checkImage = null;
@@ -296,17 +303,16 @@ public class MenuItem extends ListViewItem {
         iconImage = null;
         data = null;
         moreMenu = null;
-        onItemClickListener = null;
-
-    }
-
-    public static class MenuItemStyle {
-        public BitmapFont font;
-        public Color fontColor;
     }
 
     @Override
     public String getName() {
         return name;
+    }
+
+    public static class MenuItemStyle {
+        public BitmapFont font;
+        public Color fontColor;
+        public Drawable option_select, option_back;
     }
 }

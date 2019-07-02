@@ -1,5 +1,5 @@
 /* 
- * Copyright (C) 2011-2016 team-cachebox.de
+ * Copyright (C) 2011-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -17,14 +17,14 @@ package de.longri.cachebox3.gui.actions;
 
 
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
-import de.longri.cachebox3.gui.actions.show_activities.Action_ShowFilterSettings;
-import de.longri.cachebox3.gui.actions.show_vies.*;
+import de.longri.cachebox3.CB;
+import de.longri.cachebox3.gui.actions.show_activities.*;
 import de.longri.cachebox3.gui.widgets.QuickButtonItem;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import de.longri.cachebox3.settings.Config;
 import de.longri.cachebox3.translation.Translation;
 import de.longri.cachebox3.utils.MoveableList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Enthält die Actions Möglichkeiten für die Quick Buttons
@@ -50,13 +50,13 @@ public enum QuickActions {
     Hint, // 15
     Parking, // 16
     Day_Night, // 17
-    FieldNotes, // 18
-    QuickFieldNotes, // 19
+    Drafts, // 18
+    QuickDrafts, // 19
     TrackableListView, // 20
     addWP, // 21
     Solver2, // 22
     Notesview, // 23
-    uploadFieldNote, // 24
+    uploadDraft, // 24
     torch, // 25
 
     // ScreenLock, // 21
@@ -104,10 +104,10 @@ public enum QuickActions {
 
             String ActionsString = "";
             int counter = 0;
-            for (int i = 0, n = retList.size(); i < n; i++) {
+            for (int i = 0, n = retList.size; i < n; i++) {
                 QuickButtonItem tmp = retList.get(i);
                 ActionsString += String.valueOf(tmp.getAction().ordinal());
-                if (counter < retList.size() - 1) {
+                if (counter < retList.size - 1) {
                     ActionsString += ",";
                 }
                 counter++;
@@ -131,19 +131,19 @@ public enum QuickActions {
     public static AbstractAction getActionEnumById(int id) {
         switch (id) {
             case 0:
-                return new Action_Show_DescriptionView();
+                return CB.viewmanager.getAction_Show_DescriptionView();
             case 1:
-                return new Action_Show_WaypointView();
+                return CB.viewmanager.getAction_Show_WaypointView();
             case 2:
-                return new Action_Show_LogView();
+                return CB.viewmanager.getAction_Show_LogView();
             case 3:
-                return new Action_Show_MapView();
+                return CB.viewmanager.getAction_Show_MapView();
             case 4:
-                return new Action_Show_CompassView();
+                return CB.viewmanager.getAction_Show_CompassView();
             case 5:
-                return new Action_Show_CacheList();
+                return CB.viewmanager.getAction_Show_CacheList();
             case 6:
-                return new Action_Show_TrackListView();
+                return CB.viewmanager.getAction_Show_TrackListView();
             case 7:
                 return new Action_TakePhoto();
             case 8:
@@ -151,35 +151,35 @@ public enum QuickActions {
             case 9:
                 return new Action_RecVoice();
             case 10:
-                return new Action_Show_Search();
+                return new Action_SearchDialog();
             case 11:
-                return new Action_ShowFilterSettings();
+                return new Action_EditFilterSettings();
             case 12:
                 return new Action_Switch_Autoresort();
             case 13:
-                return new Action_Show_SolverView();
+                return CB.viewmanager.getAction_Show_SolverView();
             case 14:
-                return new Action_Show_SpoilerView();
+                return CB.viewmanager.getAction_Show_SpoilerView();
             case 15:
-                return new Action_Show_Hint();
+                return new Action_HintDialog();
             case 16:
-                return new Action_Show_ParkingDialog();
+                return new Action_ParkingDialog();
             case 17:
                 return new Action_Toggle_Day_Night();
             case 18:
-                return new Action_Show_FieldNotesView();
+                return CB.viewmanager.getAction_Show_DraftsView();
             case 19:
-                return new Action_QuickFieldNote();
+                return new Action_QuickDraft();
             case 20:
-                return new Action_Show_TrackableListView();
+                return CB.viewmanager.getAction_Show_TrackableListView();
             case 21:
                 return new Action_Add_WP();
             case 22:
-                return new Action_Show_SolverView2();
+                return CB.viewmanager.getAction_Show_SolverView2();
             case 23:
-                return new Action_Show_NoteView();
+                return CB.viewmanager.getAction_Show_NoteView();
             case 24:
-                return new Action_Upload_Fieldnotes();
+                return new Action_Upload_Drafts();
             case 25:
                 return new Action_Switch_Torch();
 
@@ -187,60 +187,60 @@ public enum QuickActions {
         return null;
     }
 
-    public static String getName(int id) {
+    public static CharSequence getName(int id) {
         switch (id) {
             case 0:
-                return Translation.Get("Description");
+                return Translation.get("Description");
             case 1:
-                return Translation.Get("Waypoints");
+                return Translation.get("Waypoints");
             case 2:
-                return Translation.Get("ShowLogs");
+                return Translation.get("ShowLogs");
             case 3:
-                return Translation.Get("Map");
+                return Translation.get("Map");
             case 4:
-                return Translation.Get("Compass");
+                return Translation.get("Compass");
             case 5:
-                return Translation.Get("cacheList");
+                return Translation.get("cacheList");
             case 6:
-                return Translation.Get("Tracks");
+                return Translation.get("Tracks");
             case 7:
-                return Translation.Get("TakePhoto");
+                return Translation.get("TakePhoto");
             case 8:
-                return Translation.Get("RecVideo");
+                return Translation.get("RecVideo");
             case 9:
-                return Translation.Get("VoiceRec");
+                return Translation.get("VoiceRec");
             case 10:
-                return Translation.Get("Search");
+                return Translation.get("Search");
             case 11:
-                return Translation.Get("filter");
+                return Translation.get("filter");
             case 12:
-                return Translation.Get("AutoResort");
+                return Translation.get("AutoResort");
             case 13:
-                return Translation.Get("Solver");
+                return Translation.get("Solver");
             case 14:
-                return Translation.Get("spoiler");
+                return Translation.get("spoiler");
             case 15:
-                return Translation.Get("hint");
+                return Translation.get("hint");
             case 16:
-                return Translation.Get("MyParking");
+                return Translation.get("MyParking");
             case 17:
-                return Translation.Get("DayNight");
+                return Translation.get("DayNight");
             case 18:
-                return Translation.Get("Fieldnotes");
+                return Translation.get("Drafts");
             case 19:
-                return Translation.Get("QuickFieldNote");
+                return Translation.get("QuickDraft");
             case 20:
-                return Translation.Get("TBList");
+                return Translation.get("TBList");
             case 21:
-                return Translation.Get("AddWaypoint");
+                return Translation.get("AddWaypoint");
             case 22:
-                return Translation.Get("Solver") + " 2";
+                return Translation.get("Solver") + " 2";
             case 23:
-                return Translation.Get("Notes");
+                return Translation.get("Notes");
             case 24:
-                return Translation.Get("uploadFieldNotes");
+                return Translation.get("uploadDrafts");
             case 25:
-                return Translation.Get("torch");
+                return Translation.get("torch");
 
         }
         return "empty";

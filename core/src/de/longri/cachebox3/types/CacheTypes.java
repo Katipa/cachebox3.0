@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2017-2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -15,41 +15,72 @@
  */
 package de.longri.cachebox3.types;
 
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.g2d.Batch;
-import com.badlogic.gdx.scenes.scene2d.ui.Widget;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
-import com.badlogic.gdx.scenes.scene2d.utils.TransformDrawable;
 import com.kotcrab.vis.ui.VisUI;
+import de.longri.cachebox3.gui.interfaces.SelectBoxItem;
+import de.longri.cachebox3.gui.skin.styles.CacheTypeStyle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 
-public enum CacheTypes {
+public enum CacheTypes implements SelectBoxItem {
+
     Traditional(true), // = 0,
+
     Multi(true), // = 1,
+
     Mystery(true), // = 2,
+
     Camera(true), // = 3,
+
     Earth(true), // = 4,
+
     Event(true), // = 5,
+
     MegaEvent(true), // = 6,
+
     CITO(true), // = 7,
+
     Virtual(true), // = 8,
+
     Letterbox(true), // = 9,
+
     Wherigo(true), // = 10,
+
     ReferencePoint(false), // = 11,
+
     Wikipedia(false), // = 12,
+
     Undefined(true), // = 13,
+
     MultiStage(false), // = 14,
+
     MultiQuestion(false), // = 15,
+
     Trailhead(false), // = 16,
+
     ParkingArea(false), // = 17,
+
     Final(false), // = 18, !!! 18 used in CacheListDAO
+
     Cache(true), // = 19,
+
     MyParking(true), // = 20
-    Munzee(true), // 21
+
     Giga(true), // 22
+
+    APE(true),
+
+    AdventuresExhibit(true),
+
+    HQ(true),
+
+    LabCache(true),
     ;
 
+    private final static Logger log = LoggerFactory.getLogger(CacheTypes.class);
+    static CacheTypeStyle cacheListTypeStyle;
     private boolean isCache;
 
     CacheTypes(boolean isCache) {
@@ -77,12 +108,22 @@ public enum CacheTypes {
         } else if (string.equalsIgnoreCase("Cache In Trash Out Event")) {
             return CITO;
         } else {
-            // Remove trailing " cache" or " hybrid" fragments
-            if (string.contains(" "))
-                string = string.substring(0, string.indexOf(" "));
-            // Remove trailing "-cache" fragments
+            // remove trailing "-cache" fragments
             if (string.contains("-"))
                 string = string.substring(0, string.indexOf("-"));
+
+            // remove trailing "Geocache|" fragments
+            if (string.contains("|"))
+                string = string.substring(string.indexOf("|") + 1);
+
+            if (string.toLowerCase().contains("flag")) {
+                if (string.toLowerCase().contains("green"))
+                    return ReferencePoint;
+            }
+
+            // remove trailing " cache" or " hybrid" fragments
+            if (string.contains(" "))
+                string = string.substring(0, string.indexOf(" "));
 
             // Replace some opencaching.de / geotoad cache types
             if (string.toLowerCase().contains("unknown"))
@@ -107,195 +148,137 @@ public enum CacheTypes {
                 return ParkingArea;
             if (string.toLowerCase().contains("stages"))
                 return MultiStage;
-            if (string.toLowerCase().contains("munzee"))
-                return Munzee;
             if (string.toLowerCase().contains("mega"))
                 return MegaEvent;
+            if (string.toLowerCase().contains("letterbox"))
+                return Letterbox;
             if (string.toLowerCase().contains("virtual"))
                 return MultiQuestion; // Import Virtual Stage as Question of a Multi
             if (string.toLowerCase().contains("physical"))
                 return MultiStage; // Import Physical Stage as a Multi Stage
+
+
             if (string.length() == 0)
                 return Undefined;
         }
 
-        try
-
-        {
+        try {
             return valueOf(string);
-        } catch (
-
-                Exception ex)
-
-        {
+        } catch (Exception ex) {
             CacheTypes cacheType = Undefined;
             Boolean blnCacheTypeFound = false;
             for (CacheTypes ct : CacheTypes.values()) {
-                if (ct.toString().toLowerCase().equals(string.toLowerCase())) {
+                if (ct.toString().toLowerCase().contains(string.toLowerCase())) {
                     cacheType = ct;
                     blnCacheTypeFound = true;
                     break;
                 }
             }
             if (!blnCacheTypeFound) {
-                System.out.println("Handle cache type: " + string);
+                log.error("Handle cache type: " + string);
             }
             return cacheType;
         }
-
     }
 
-    public CacheWidget getCacheWidget() {
-        return new CacheWidget(this);
+    public static CacheTypes get(int index) {
+        return CacheTypes.values()[index];
     }
 
+    public CacheWidget getCacheWidget(CacheTypeStyle style,
+                                      Drawable leftInfoIcon, Drawable rightInfoIcon,
+                                      Drawable leftTopIcon, Drawable rightTopIcon) {
+        return new CacheWidget(this, style, leftInfoIcon, rightInfoIcon, leftTopIcon, rightTopIcon);
+    }
+
+    public String getName() {
+        return this.name();
+    }
+
+    @Override
     public Drawable getDrawable() {
-        Drawable drawable;
+        // for select Box interface, use 'cacheList' style
+        if (cacheListTypeStyle == null) cacheListTypeStyle = VisUI.getSkin().get("bubble", CacheTypeStyle.class);
+        return getDrawable(cacheListTypeStyle);
+    }
 
+    public Drawable getDrawable(CacheTypeStyle style) {
+        if (style == null) return null;
+        Drawable drawable;
         switch (this) {
             case Traditional:
-                drawable = VisUI.getSkin().getDrawable("traddi");
+                drawable = style.traditional;
                 break;
             case Multi:
-                drawable = VisUI.getSkin().getDrawable("multi");
+                drawable = style.multi;
                 break;
             case Mystery:
-                drawable = VisUI.getSkin().getDrawable("myterie");
+                drawable = style.mystery;
                 break;
             case Camera:
-                drawable = VisUI.getSkin().getDrawable("camera");
+                drawable = style.camera;
                 break;
             case Earth:
-                drawable = VisUI.getSkin().getDrawable("earth");
+                drawable = style.earth;
                 break;
             case Event:
-                drawable = VisUI.getSkin().getDrawable("event");
+                drawable = style.event;
                 break;
             case MegaEvent:
-                drawable = VisUI.getSkin().getDrawable("mega");
+                drawable = style.megaEvent;
                 break;
             case CITO:
-                drawable = VisUI.getSkin().getDrawable("cito");
+                drawable = style.cito;
                 break;
             case Virtual:
-                drawable = VisUI.getSkin().getDrawable("virtual");
+                drawable = style.virtual;
                 break;
             case Letterbox:
-                drawable = VisUI.getSkin().getDrawable("letterbox");
+                drawable = style.letterbox;
                 break;
             case Wherigo:
-                drawable = VisUI.getSkin().getDrawable("whereigo");
+                drawable = style.wherigo;
                 break;
             case ReferencePoint:
-                drawable = null;
+                drawable = style.referencePoint;
                 break;
             case Wikipedia:
-                drawable = null;
+                drawable = style.wikipedia;
                 break;
             case Undefined:
-                drawable = null;
+                drawable = style.undefined;
                 break;
             case MultiStage:
-                drawable = null;
+                drawable = style.multiStage;
                 break;
             case MultiQuestion:
-                drawable = null;
+                drawable = style.multiQuestion;
                 break;
             case Trailhead:
-                drawable = null;
+                drawable = style.trailhead;
                 break;
             case ParkingArea:
-                drawable = null;
+                drawable = style.parkingArea;
                 break;
             case Final:
-                drawable = null;
+                drawable = style.Final;
                 break;
             case Cache:
-                drawable = null;
+                drawable = style.cache;
                 break;
             case MyParking:
-                drawable = null;
-                break;
-            case Munzee:
-                drawable = null;
+                drawable = style.myParking;
                 break;
             case Giga:
-                drawable = VisUI.getSkin().getDrawable("giga");
+                drawable = style.giga;
+                break;
+            case LabCache:
+                drawable = style.labCache;
                 break;
             default:
                 drawable = null;
         }
         return drawable;
-    }
-
-    public static class CacheWidget extends Widget {
-        private final Drawable drawable;
-        private boolean needsLayout = true;
-
-        public CacheWidget(CacheTypes cacheType) {
-            drawable = cacheType.getDrawable();
-        }
-
-        private float x, y, imageWidth, imageHeight, scaleX, scaleY;
-
-        @Override
-        public void layout() {
-            if (!needsLayout) {
-                super.layout();
-                return;
-            }
-
-            x = getX();
-            y = getY();
-            imageWidth = getWidth();
-            imageHeight = getHeight();
-            scaleX = getScaleX();
-            scaleY = getScaleY();
-
-            super.layout();
-            needsLayout = true;
-        }
-
-        /**
-         * Called when the actor's size has been changed.
-         */
-        @Override
-        protected void sizeChanged() {
-            super.sizeChanged();
-            needsLayout = true;
-        }
-
-        @Override
-        public void draw(Batch batch, float parentAlpha) {
-            validate();
-            Color color = getColor();
-            batch.setColor(color.r, color.g, color.b, color.a * parentAlpha);
-
-            x = getX();
-            y = getY();
-
-            if (drawable instanceof TransformDrawable) {
-                float rotation = getRotation();
-                if (scaleX != 1 || scaleY != 1 || rotation != 0) {
-                    ((TransformDrawable) drawable).draw(batch, x, y, getOriginX(), getOriginY(),
-                            imageWidth, imageHeight, scaleX, scaleY, rotation);
-                    return;
-                }
-            }
-            if (drawable != null) drawable.draw(batch, x, y, imageWidth * scaleX, imageHeight * scaleY);
-        }
-
-        @Override
-        public float getPrefWidth() {
-            if (drawable != null) return drawable.getMinWidth();
-            return 0;
-        }
-
-        @Override
-        public float getPrefHeight() {
-            if (drawable != null) return drawable.getMinHeight();
-            return 0;
-        }
     }
 
     @Override
@@ -325,8 +308,6 @@ public enum CacheTypes {
                 return "Question to Answer";
             case MultiStage:
                 return "Stages of a Multicache";
-            case Munzee:
-                break;
             case MyParking:
                 break;
             case Mystery:
@@ -355,8 +336,8 @@ public enum CacheTypes {
         return super.toString();
     }
 
-    public static String toShortString(Cache cache) {
-        switch (cache.Type) {
+    public String toShortString() {
+        switch (this) {
             case CITO:
                 return "X";
             case Cache:
@@ -375,8 +356,6 @@ public enum CacheTypes {
                 return "X";
             case Multi:
                 return "M";
-            case Munzee:
-                return "Z";
             case Mystery:
                 return "U";
             case Traditional:
@@ -394,4 +373,7 @@ public enum CacheTypes {
         return " ";
     }
 
+    public boolean isCache() {
+        return isCache;
+    }
 }

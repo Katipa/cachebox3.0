@@ -20,6 +20,6 @@ package com.badlogic.gdx.scenes.scene2d.ui;
  */
 public interface GetName {
 
-    public String getName();
+     String getName();
 
 }

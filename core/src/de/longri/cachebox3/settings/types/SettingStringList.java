@@ -18,20 +18,22 @@ package de.longri.cachebox3.settings.types;
 import org.slf4j.Logger;
 
 /**
- * TODO document
- *
  * @author Longri  2016
  */
 public class SettingStringList extends SettingBase<String[]> {
     final static Logger log = org.slf4j.LoggerFactory.getLogger(SettingStringList.class);
 
     public SettingStringList(String name, SettingCategory category, SettingMode modus, String[] defaultValue, SettingStoreType StoreType, SettingUsage usage) {
-        super(name, category, modus, StoreType, usage);
+        this(name, category, modus, defaultValue, StoreType, usage, false);
+    }
+
+    public SettingStringList(String name, SettingCategory category, SettingMode modus, String[] defaultValue, SettingStoreType StoreType, SettingUsage usage, boolean desired) {
+        super(name, category, modus, StoreType, usage, desired);
         this.defaultValue = defaultValue;
     }
 
     @Override
-    public String toDBString() {
+    public Object toDbValue() {
 
         StringBuilder sb = new StringBuilder();
         int idx = 0;
@@ -44,9 +46,9 @@ public class SettingStringList extends SettingBase<String[]> {
     }
 
     @Override
-    public boolean fromDBString(String dbString) {
+    public boolean fromDbvalue(Object dbString) {
         try {
-            value = dbString.split(SettingString.STRING_SPLITTER);
+            value = ((String)dbString).split(SettingString.STRING_SPLITTER);
             return true;
         } catch (Exception ex) {
             value = defaultValue;

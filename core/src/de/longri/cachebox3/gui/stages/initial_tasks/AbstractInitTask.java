@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016 - 2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@ package de.longri.cachebox3.gui.stages.initial_tasks;
 public abstract class AbstractInitTask {
 
     public final String name;
-    public final int percent;
 
-    public AbstractInitTask(String name, int percent) {
+    public AbstractInitTask(String name) {
         this.name = name;
-        this.percent = percent;
     }
 
     public abstract void runnable();
 
+    public abstract int getProgressMax();
 }
 

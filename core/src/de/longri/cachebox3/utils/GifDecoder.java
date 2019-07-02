@@ -335,7 +335,7 @@ public class GifDecoder {
 					count--;
 					continue;
 				}
-				// Get the next code.
+				// get the next code.
 				code = datum & code_mask;
 				datum >>= code_size;
 				bits -= code_size;
@@ -367,7 +367,7 @@ public class GifDecoder {
 					code = prefix[code];
 				}
 				first = (suffix[code]) & 0xff;
-				// Add a new string to the string table,
+				// add a new string to the string table,
 				if (available >= MAX_STACK_SIZE) {
 					break;
 				}

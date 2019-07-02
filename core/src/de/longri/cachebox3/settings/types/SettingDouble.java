@@ -18,20 +18,24 @@ package de.longri.cachebox3.settings.types;
 public class SettingDouble extends SettingBase<Double> {
 
     public SettingDouble(String name, SettingCategory category, SettingMode modus, double defaultValue, SettingStoreType StoreType, SettingUsage usage) {
-        super(name, category, modus, StoreType, usage);
+        this(name, category, modus, defaultValue, StoreType, usage, false);
+    }
+
+    public SettingDouble(String name, SettingCategory category, SettingMode modus, double defaultValue, SettingStoreType StoreType, SettingUsage usage, boolean desired) {
+        super(name, category, modus, StoreType, usage, desired);
         this.defaultValue = defaultValue;
         this.value = defaultValue;
     }
 
     @Override
-    public String toDBString() {
+    public Object toDbValue() {
         return String.valueOf(value);
     }
 
     @Override
-    public boolean fromDBString(String dbString) {
+    public boolean fromDbvalue(Object dbString) {
         try {
-            value = Double.valueOf(dbString);
+            value = Double.valueOf((String) dbString);
             return true;
         } catch (Exception ex) {
             value = defaultValue;

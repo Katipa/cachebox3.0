@@ -1,5 +1,5 @@
-/* 
- * Copyright (C) 2016 team-cachebox.de
+/*
+ * Copyright (C) 2016 - 2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -17,64 +17,83 @@ package de.longri.cachebox3.sqlite;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
-import com.badlogic.gdx.sql.SQLiteGdxDatabase;
-import com.badlogic.gdx.sql.SQLiteGdxDatabaseCursor;
-import com.badlogic.gdx.sql.SQLiteGdxDatabaseFactory;
-import com.badlogic.gdx.sql.SQLiteGdxException;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.ObjectMap;
+import de.longri.cachebox3.CB;
 import de.longri.cachebox3.Utils;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
-import de.longri.cachebox3.types.CacheList;
-import de.longri.cachebox3.types.Categories;
-import de.longri.cachebox3.types.Category;
+import de.longri.cachebox3.gui.utils.CharSequenceArray;
+import de.longri.cachebox3.settings.Config;
+import de.longri.cachebox3.sqlite.dao.DaoFactory;
+import de.longri.cachebox3.types.*;
+import de.longri.cachebox3.utils.NamedRunnable;
+import de.longri.gdx.sqlite.GdxSqlite;
+import de.longri.gdx.sqlite.GdxSqliteCursor;
+import de.longri.gdx.sqlite.GdxSqlitePreparedStatement;
+import de.longri.gdx.sqlite.SQLiteGdxException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map.Entry;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 
 public class Database {
-    protected final Logger log;
+
+
+    public final static DateFormat cbDbFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+    private final AtomicInteger EXCLUSIVE_ID = new AtomicInteger(-1);
+    private Logger log;
     public static Database Data;
-    public static Database FieldNotes;
+    public static Database Drafts;
     public static Database Settings;
-    private SQLiteGdxDatabase myDB;
-    public CacheList Query;
+    public GdxSqlite myDB;
+    public final CacheList cacheList;
+    private String inMemoryName;
+
+    public Database(GdxSqlite db) {
+        cacheList = new CacheList();
+        myDB = db;
+    }
 
     /**
      * @return Set To CB.Categories
      */
-    public Categories GPXFilenameUpdateCacheCount() {
-        // welche GPXFilenamen sind in der DB erfasst
-        beginTransaction();
+    public Categories gpxFilenameUpdateCacheCount() {
+        GdxSqliteCursor cursor = null;
         try {
-            SQLiteGdxDatabaseCursor reader = rawQuery("select GPXFilename_ID, Count(*) as CacheCount from Caches where GPXFilename_ID is not null Group by GPXFilename_ID", null);
-            reader.moveToFirst();
+            cursor = rawQuery("select GPXFilename_ID, Count(*) as CacheCount from CacheInfo where GPXFilename_ID is not null Group by GPXFilename_ID", (String[]) null);
 
-            while (reader.isAfterLast() == false) {
-                long GPXFilename_ID = reader.getLong(0);
-                long CacheCount = reader.getLong(1);
+            if (cursor != null) {
+                cursor.moveToFirst();
 
-                Parameters val = new Parameters();
-                val.put("CacheCount", CacheCount);
-                update("GPXFilenames", val, "ID = " + GPXFilename_ID, null);
+                ObjectMap<Long, Parameters> set = new ObjectMap<>();
+                while (cursor.isAfterLast() == false) {
+                    long gpxFilename_ID = cursor.getLong(0);
+                    long cacheCount = cursor.getLong(1);
 
-                reader.moveToNext();
+                    Parameters val = new Parameters();
+                    val.put("CacheCount", cacheCount);
+                    set.put(gpxFilename_ID, val);
+                    cursor.moveToNext();
+                }
+                cursor.close();
+
+                for (ObjectMap.Entry entry : set) {
+                    update("GPXFilenames", (Parameters) entry.value, "ID = " + entry.key, null);
+                }
             }
 
-            delete("GPXFilenames", "Cachecount is NULL or CacheCount = 0", null);
-            delete("GPXFilenames", "ID not in (Select GPXFilename_ID From Caches)", null);
-            reader.close();
-            setTransactionSuccessful();
+            delete("GPXFilenames", "Cachecount is NULL or CacheCount = 0");
+            delete("GPXFilenames", "ID not in (Select GPXFilename_ID From CacheInfo)");
         } catch (Exception e) {
-
-        } finally {
-            endTransaction();
+            e.printStackTrace();
         }
 
-        //TODO ???
         Categories categories = new Categories();
         return categories;
     }
@@ -85,9 +104,84 @@ public class Database {
         return false;
     }
 
+    public Array<LogEntry> getLogs(AbstractCache abstractCache) {
+        if (abstractCache == null) // if no cache is selected!
+            return new Array<>();
+        return getLogs(abstractCache.getId());
+    }
+
+    public Array<LogEntry> getLogs(long id) {
+        Array<LogEntry> result = new Array<LogEntry>();
+
+        GdxSqliteCursor reader = this.rawQuery("select CacheId, Timestamp, Finder, Type, Comment, Id from Logs where CacheId = \"" + Long.toString(id) + "\"", (String[]) null);
+        if (reader != null) {
+            try {
+                reader.moveToFirst();
+                while (!reader.isAfterLast()) {
+                    LogEntry logent = getLogEntry(reader, true);
+                    if (logent != null)
+                        result.add(logent);
+                    reader.moveToNext();
+                }
+            } finally {
+                reader.close();
+            }
+        }
+        return result;
+    }
+
+    private static LogEntry getLogEntry(GdxSqliteCursor reader, boolean filterBbCode) {
+        LogEntry retLogEntry = new LogEntry();
+        retLogEntry.CacheId = reader.getLong(0);
+        String sDate = reader.getString(1);
+        try {
+            retLogEntry.Timestamp = Database.cbDbFormat.parse(sDate);
+        } catch (ParseException e) {
+        }
+        retLogEntry.Finder = reader.getString(2);
+        retLogEntry.Type = LogTypes.values()[reader.getInt(3)];
+        // retLogEntry.TypeIcon = reader.getInt(3);
+        retLogEntry.Comment = reader.getString(4);
+        retLogEntry.Id = reader.getLong(5);
+
+        if (filterBbCode) {
+            retLogEntry.Comment = LogEntry.filterBBCode(retLogEntry.Comment);
+        }
+        return retLogEntry;
+    }
+
+    public CharSequence getCharSequence(String sql, String[] args) {
+        return new CharSequenceArray(getString(sql, args));
+    }
+
+    public String getString(String sql, String[] args) {
+        GdxSqliteCursor cursor = null;
+        try {
+            cursor = this.rawQuery(sql, args);
+            if (cursor != null) {
+                cursor.moveToFirst();
+                if (!cursor.isAfterLast()) {
+                    String result = cursor.getString(0);
+                    return result != null ? result : "";
+                }
+            }
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return "";
+    }
+
+    public FileHandle getFileHandle() {
+        return databasePath;
+    }
+
+    public AbstractCache getFromDbByGcCode(String gcCode, boolean withWaypoints, boolean fullData) {
+        if (this.databaseType != DatabaseType.CacheBox3) throw new RuntimeException("Is no Cachebox Data DB");
+        return DaoFactory.CACHE_DAO.getFromDbByGcCode(this, gcCode, withWaypoints, fullData);
+    }
 
     public enum DatabaseType {
-        CacheBox, FieldNotes, Settings
+        CacheBox3, Drafts, Settings
     }
 
     protected DatabaseType databaseType;
@@ -96,18 +190,21 @@ public class Database {
         super();
         this.databaseType = databaseType;
 
-        log = LoggerFactory.getLogger("Database." + databaseType);
-
         switch (databaseType) {
-            case CacheBox:
+            case CacheBox3:
                 latestDatabaseChange = DatabaseVersions.LatestDatabaseChange;
-                Query = new CacheList();
+                cacheList = new CacheList();
                 break;
-            case FieldNotes:
-                latestDatabaseChange = DatabaseVersions.LatestDatabaseFieldNoteChange;
+            case Drafts:
+                latestDatabaseChange = DatabaseVersions.LatestDatabaseDraftChange;
+                cacheList = null;
                 break;
             case Settings:
                 latestDatabaseChange = DatabaseVersions.LatestDatabaseSettingsChange;
+                cacheList = null;
+                break;
+            default:
+                cacheList = null;
         }
     }
 
@@ -130,60 +227,136 @@ public class Database {
     public long MasterDatabaseId = 0;
     protected int latestDatabaseChange = 0;
 
+    public void startUp() {
+        //open in memory DB
 
-    public boolean StartUp(FileHandle databasePath) throws SQLiteGdxException {
+//        log = LoggerFactory.getLogger("DB:" + inMemoryName);
+        log = LoggerFactory.getLogger("EMPTY");
 
-        FileHandle parentDirectory = databasePath.parent();
+        //reset version
+        shemaVersion.set(-1);
 
-        if (!parentDirectory.exists()) {
-            throw new SQLiteGdxException("Directory for DB doesn't exist: " + parentDirectory.file().getAbsolutePath());
-        }
-
-
-        log.debug("StartUp Database: " + Utils.GetFileName(databasePath));
+        log.debug("startUp Database: " + inMemoryName);
         if (myDB != null) {
             log.debug("Database is open ");
-            if (this.databasePath.file().getAbsolutePath().equals(databasePath.file().getAbsolutePath())) {
-                log.debug("Database is the same");
-                if (!myDB.isOpen()) {
-                    log.debug("Database was close so open now");
-                    myDB.openOrCreateDatabase();
-                }
 
-                // is open
-                return true;
+            log.debug("Database is the same");
+            if (!myDB.isOpen()) {
+                log.debug("Database was close so open now");
+                myDB.openOrCreateDatabase();
             }
-            log.debug("Database is changed! close " + Utils.GetFileName(this.databasePath));
-            if (myDB.isOpen()) myDB.closeDatabase();
-            myDB = null;
+
+            // is open
+            return;
         }
 
+        log.debug("Initial database: " + inMemoryName);
+        initialize();
 
-        this.databasePath = databasePath;
-        log.debug("Initial database: " + Utils.GetFileName(databasePath));
-        Initialize();
-
-        int databaseSchemeVersion = GetDatabaseSchemeVersion();
+//        endTransaction();
+        int databaseSchemeVersion = getDatabaseSchemeVersion();
         log.debug("DatabaseSchemeVersion: " + databaseSchemeVersion);
         if (databaseSchemeVersion < latestDatabaseChange) {
             log.debug("Alter Database to SchemeVersion: " + latestDatabaseChange);
-            AlterDatabase(databaseSchemeVersion);
+            alterDatabase(databaseSchemeVersion);
             SetDatabaseSchemeVersion();
         }
 
 
-        if (databaseType == DatabaseType.CacheBox) { // create or load DatabaseId for each
-            DatabaseId = ReadConfigLong("DatabaseId");
+        if (databaseType == DatabaseType.CacheBox3) { // create or load DatabaseId for each
+            DatabaseId = readConfigLong("DatabaseId");
             if (DatabaseId <= 0) {
                 DatabaseId = new Date().getTime();
-                WriteConfigLong("DatabaseId", DatabaseId);
+                writeConfigLong("DatabaseId", DatabaseId);
             }
             // Read MasterDatabaseId. If MasterDatabaseId > 0 -> This database
             // is connected to the Replications Master of WinCB
             // In this case changes of Waypoints, Solvertext, Notes must be
             // noted in the Table Replication...
-            MasterDatabaseId = ReadConfigLong("MasterDatabaseId");
+            MasterDatabaseId = readConfigLong("MasterDatabaseId");
         }
+        return;
+    }
+
+
+    public boolean startUp(final FileHandle path) throws SQLiteGdxException {
+
+        final AtomicBoolean WAIT = new AtomicBoolean(true);
+        final AtomicBoolean io = new AtomicBoolean(false);
+
+        CB.postOnGlThread(new NamedRunnable("StartUp Database on MainThread") {
+            @Override
+            public void run() {
+                log = LoggerFactory.getLogger("DB:" + path.nameWithoutExtension());
+
+                FileHandle parentDirectory = path.parent();
+
+                if (!parentDirectory.exists()) {
+                    WAIT.set(false);
+                    throw new SQLiteGdxException("Directory for DB doesn't exist: " + parentDirectory.file().getAbsolutePath());
+                }
+
+                //reset version
+                shemaVersion.set(-1);
+
+                log.debug("startUp Database: " + Utils.getFileName(path));
+                if (myDB != null) {
+                    log.debug("Database is open ");
+                    if (databasePath.file().getAbsolutePath().equals(path.file().getAbsolutePath())) {
+                        log.debug("Database is the same");
+                        if (!myDB.isOpen()) {
+                            log.debug("Database was close so open now");
+                            myDB.openOrCreateDatabase();
+                        }
+
+                        // is open
+                        io.set(true);
+                    }
+                    log.debug("Database is changed! close " + Utils.getFileName(databasePath));
+                    if (myDB != null && myDB.isOpen()) myDB.closeDatabase();
+                    myDB = null;
+                }
+
+
+                databasePath = path;
+                log.debug("Initial database: " + Utils.getFileName(databasePath));
+                initialize();
+
+//
+                int databaseSchemeVersion = getDatabaseSchemeVersion();
+                log.debug("DatabaseSchemeVersion: " + databaseSchemeVersion);
+                if (databaseSchemeVersion < latestDatabaseChange) {
+                    log.debug("Alter Database to SchemeVersion: " + latestDatabaseChange);
+                    alterDatabase(databaseSchemeVersion);
+                    SetDatabaseSchemeVersion();
+                }
+
+
+                if (databaseType == DatabaseType.CacheBox3) { // create or load DatabaseId for each
+                    DatabaseId = readConfigLong("DatabaseId");
+                    if (DatabaseId <= 0) {
+                        DatabaseId = new Date().getTime();
+                        writeConfigLong("DatabaseId", DatabaseId);
+                    }
+                    // Read MasterDatabaseId. If MasterDatabaseId > 0 -> This database
+                    // is connected to the Replications Master of WinCB
+                    // In this case changes of Waypoints, Solvertext, Notes must be
+                    // noted in the Table Replication...
+                    MasterDatabaseId = readConfigLong("MasterDatabaseId");
+                }
+                WAIT.set(false);
+            }
+        });
+
+        while (WAIT.get()) {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+
         return true;
     }
 
@@ -193,28 +366,38 @@ public class Database {
     }
 
 
-    private int GetDatabaseSchemeVersion() {
+    private AtomicInteger shemaVersion = new AtomicInteger(-1);
+
+    public int getDatabaseSchemeVersion() {
+
+        if (shemaVersion.get() >= 0) return shemaVersion.get();
+
+        if (!isTableExists("Config")) {
+            return -1;
+        }
+
         int result = -1;
-        SQLiteGdxDatabaseCursor c = null;
+        GdxSqliteCursor cursor = null;
         try {
-            c = rawQuery("select Value from Config where [Key] like ?", new String[]{"DatabaseSchemeVersionWin"});
+            cursor = rawQuery("select Value from Config where [Key] like 'DatabaseSchemeVersionWin'");
         } catch (Exception exc) {
             return -1;
         }
+        if (cursor == null) return -1;
         try {
-            c.moveToFirst();
-            while (!c.isAfterLast()) {
-                String databaseSchemeVersion = c.getString(0);
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                String databaseSchemeVersion = cursor.getString(0);
                 result = Integer.parseInt(databaseSchemeVersion);
-                c.moveToNext();
+                cursor.moveToNext();
             }
         } catch (Exception exc) {
             result = -1;
         }
-        if (c != null) {
-            c.close();
+        if (cursor != null) {
+            cursor.close();
         }
-
+        shemaVersion.set(result);
         return result;
     }
 
@@ -235,9 +418,31 @@ public class Database {
             val.put("Key", "DatabaseSchemeVersion");
             insert("Config", val);
         }
+        shemaVersion.set(latestDatabaseChange);
     }
 
-    public void WriteConfigString(String key, String value) {
+    public boolean isTableExists(String tableName) {
+        GdxSqliteCursor cursor = null;
+        try {
+            cursor = rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='" + tableName
+                    + "' COLLATE NOCASE", (String[]) null);
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                String name = cursor.getString(0);
+                if (tableName.equals(name)) {
+                    return true;
+                }
+                cursor.moveToNext();
+            }
+        } catch (Exception exc) {
+            return false;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return false;
+    }
+
+    public void writeConfigString(String key, Object value) {
         Parameters val = new Parameters();
         val.put("Value", value);
         long anz = update("Config", val, "[Key] like '" + key + "'", null);
@@ -248,7 +453,7 @@ public class Database {
         }
     }
 
-    public void WriteConfigLongString(String key, String value) {
+    public void WriteConfigLongString(String key, Object value) {
         Parameters val = new Parameters();
         val.put("LongString", value);
         long anz = update("Config", val, "[Key] like '" + key + "'", null);
@@ -259,26 +464,26 @@ public class Database {
         }
     }
 
-    public String ReadConfigString(String key) throws Exception {
+    public String readConfigString(String key) throws Exception {
         String result = "";
-        SQLiteGdxDatabaseCursor c = null;
+        GdxSqliteCursor cursor = null;
         boolean found = false;
         try {
-            c = rawQuery("select Value from Config where [Key] like ?", new String[]{key});
+            cursor = rawQuery("select Value from Config where [Key] like ?", new String[]{key});
         } catch (Exception exc) {
             throw new Exception("not in DB");
         }
         try {
-            c.moveToFirst();
-            while (!c.isAfterLast()) {
-                result = c.getString(0);
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                result = cursor.getString(0);
                 found = true;
-                c.moveToNext();
+                cursor.moveToNext();
             }
         } catch (Exception exc) {
             throw new Exception("not in DB");
         } finally {
-            c.close();
+            cursor.close();
         }
 
         if (!found)
@@ -287,26 +492,28 @@ public class Database {
         return result;
     }
 
-    public String ReadConfigLongString(String key) throws Exception {
+    public String readConfigLongString(String key) throws Exception {
         String result = "";
-        SQLiteGdxDatabaseCursor c = null;
+        GdxSqliteCursor cursor = null;
         boolean found = false;
         try {
-            c = rawQuery("select LongString from Config where [Key] like ?", new String[]{key});
+            cursor = rawQuery("select LongString from Config where [Key] like ?", new String[]{key});
         } catch (Exception exc) {
             throw new Exception("not in DB");
         }
         try {
-            c.moveToFirst();
-            while (!c.isAfterLast()) {
-                result = c.getString(0);
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                result = cursor.getString(0);
                 found = true;
-                c.moveToNext();
+                cursor.moveToNext();
             }
         } catch (Exception exc) {
             throw new Exception("not in DB");
+        } finally {
+            cursor.close();
         }
-        c.close();
+
 
         if (!found)
             throw new Exception("not in DB");
@@ -314,13 +521,51 @@ public class Database {
         return result;
     }
 
-    public void WriteConfigLong(String key, long value) {
-        WriteConfigString(key, String.valueOf(value));
+    public void writeConfigDesiredString(String key, String value) {
+        Parameters val = new Parameters();
+        val.put("desired", value);
+        long anz = update("Config", val, "[Key] like '" + key + "'", null);
     }
 
-    public long ReadConfigLong(String key) {
+    public String readConfigDesiredString(String key) throws Exception {
+
+        if (shemaVersion.get() < 1028) return null;
+
+        String result = "";
+        GdxSqliteCursor cursor = null;
+        boolean found = false;
         try {
-            String value = ReadConfigString(key);
+            cursor = rawQuery("select desired from Config where [Key] like ?", new String[]{key});
+        } catch (Exception exc) {
+            throw new Exception("not in DB");
+        }
+        try {
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                result = cursor.getString(0);
+                found = true;
+                cursor.moveToNext();
+            }
+        } catch (Exception exc) {
+            throw new Exception("not in DB");
+        } finally {
+            cursor.close();
+        }
+
+
+        if (!found)
+            throw new Exception("not in DB");
+
+        return result;
+    }
+
+    public void writeConfigLong(String key, long value) {
+        writeConfigString(key, String.valueOf(value));
+    }
+
+    public long readConfigLong(String key) {
+        try {
+            String value = readConfigString(key);
             return Long.valueOf(value);
         } catch (Exception ex) {
             return 0;
@@ -337,214 +582,21 @@ public class Database {
     }
 
 
-    protected void AlterDatabase(int lastDatabaseSchemeVersion) {
+    protected void alterDatabase(int lastDatabaseSchemeVersion) {
 
 
         switch (databaseType) {
-            case CacheBox:
-
-                beginTransaction();
-                try {
-                    if (lastDatabaseSchemeVersion <= 0) {
-                        // First Initialization of the Database
-                        execSQL("CREATE TABLE [Caches] ([Id] bigint NOT NULL primary key,[GcCode] nvarchar (12) NULL,[GcId] nvarchar (255) NULL,[Latitude] float NULL,[Longitude] float NULL,[Name] nchar (255) NULL,[Size] int NULL,[Difficulty] smallint NULL,[Terrain] smallint NULL,[Archived] bit NULL,[Available] bit NULL,[Found] bit NULL,[Type] smallint NULL,[PlacedBy] nvarchar (255) NULL,[Owner] nvarchar (255) NULL,[DateHidden] datetime NULL,[Hint] ntext NULL,[Description] ntext NULL,[Url] nchar (255) NULL,[NumTravelbugs] smallint NULL,[Rating] smallint NULL,[Vote] smallint NULL,[VotePending] bit NULL,[Notes] ntext NULL,[Solver] ntext NULL,[Favorit] bit NULL,[AttributesPositive] bigint NULL,[AttributesNegative] bigint NULL,[TourName] nchar (255) NULL,[GPXFilename_Id] bigint NULL,[HasUserData] bit NULL,[ListingCheckSum] int NULL DEFAULT 0,[ListingChanged] bit NULL,[ImagesUpdated] bit NULL,[DescriptionImagesUpdated] bit NULL,[CorrectedCoordinates] bit NULL);");
-                        execSQL("CREATE INDEX [archived_idx] ON [Caches] ([Archived] ASC);");
-                        execSQL("CREATE INDEX [AttributesNegative_idx] ON [Caches] ([AttributesNegative] ASC);");
-                        execSQL("CREATE INDEX [AttributesPositive_idx] ON [Caches] ([AttributesPositive] ASC);");
-                        execSQL("CREATE INDEX [available_idx] ON [Caches] ([Available] ASC);");
-                        execSQL("CREATE INDEX [Difficulty_idx] ON [Caches] ([Difficulty] ASC);");
-                        execSQL("CREATE INDEX [Favorit_idx] ON [Caches] ([Favorit] ASC);");
-                        execSQL("CREATE INDEX [found_idx] ON [Caches] ([Found] ASC);");
-                        execSQL("CREATE INDEX [GPXFilename_Id_idx] ON [Caches] ([GPXFilename_Id] ASC);");
-                        execSQL("CREATE INDEX [HasUserData_idx] ON [Caches] ([HasUserData] ASC);");
-                        execSQL("CREATE INDEX [ListingChanged_idx] ON [Caches] ([ListingChanged] ASC);");
-                        execSQL("CREATE INDEX [NumTravelbugs_idx] ON [Caches] ([NumTravelbugs] ASC);");
-                        execSQL("CREATE INDEX [placedby_idx] ON [Caches] ([PlacedBy] ASC);");
-                        execSQL("CREATE INDEX [Rating_idx] ON [Caches] ([Rating] ASC);");
-                        execSQL("CREATE INDEX [Size_idx] ON [Caches] ([Size] ASC);");
-                        execSQL("CREATE INDEX [Terrain_idx] ON [Caches] ([Terrain] ASC);");
-                        execSQL("CREATE INDEX [Type_idx] ON [Caches] ([Type] ASC);");
-
-                        execSQL("CREATE TABLE [CelltowerLocation] ([CellId] nvarchar (20) NOT NULL primary key,[Latitude] float NULL,[Longitude] float NULL);");
-
-                        execSQL("CREATE TABLE [GPXFilenames] ([Id] integer not null primary key autoincrement,[GPXFilename] nvarchar (255) NULL,[Imported] datetime NULL, [Name] nvarchar (255) NULL,[CacheCount] int NULL);");
-
-                        execSQL("CREATE TABLE [Logs] ([Id] bigint NOT NULL primary key, [CacheId] bigint NULL,[Timestamp] datetime NULL,[Finder] nvarchar (128) NULL,[Type] smallint NULL,[Comment] ntext NULL);");
-                        execSQL("CREATE INDEX [log_idx] ON [Logs] ([CacheId] ASC);");
-                        execSQL("CREATE INDEX [timestamp_idx] ON [Logs] ([Timestamp] ASC);");
-
-                        execSQL("CREATE TABLE [PocketQueries] ([Id] integer not null primary key autoincrement,[PQName] nvarchar (255) NULL,[CreationTimeOfPQ] datetime NULL);");
-
-                        execSQL("CREATE TABLE [Waypoint] ([GcCode] nvarchar (12) NOT NULL primary key,[CacheId] bigint NULL,[Latitude] float NULL,[Longitude] float NULL,[Description] ntext NULL,[Clue] ntext NULL,[Type] smallint NULL,[SyncExclude] bit NULL,[UserWaypoint] bit NULL,[Title] ntext NULL);");
-                        execSQL("CREATE INDEX [UserWaypoint_idx] ON [Waypoint] ([UserWaypoint] ASC);");
-
-                        execSQL("CREATE TABLE [Config] ([Key] nvarchar (30) NOT NULL, [Value] nvarchar (255) NULL);");
-                        execSQL("CREATE INDEX [Key_idx] ON [Config] ([Key] ASC);");
-
-                        execSQL("CREATE TABLE [Replication] ([Id] integer not null primary key autoincrement, [ChangeType] int NOT NULL, [CacheId] bigint NOT NULL, [WpGcCode] nvarchar (12) NULL, [SolverCheckSum] int NULL, [NotesCheckSum] int NULL, [WpCoordCheckSum] int NULL);");
-                        execSQL("CREATE INDEX [Replication_idx] ON [Replication] ([Id] ASC);");
-                        execSQL("CREATE INDEX [ReplicationCache_idx] ON [Replication] ([CacheId] ASC);");
-                    }
-
-                    if (lastDatabaseSchemeVersion < 1003) {
-                        execSQL("CREATE TABLE [Locations] ([Id] integer not null primary key autoincrement, [Name] nvarchar (255) NULL, [Latitude] float NULL, [Longitude] float NULL);");
-                        execSQL("CREATE INDEX [Locatioins_idx] ON [Locations] ([Id] ASC);");
-
-                        execSQL("CREATE TABLE [SdfExport] ([Id]  integer not null primary key autoincrement, [Description] nvarchar(255) NULL, [ExportPath] nvarchar(255) NULL, [MaxDistance] float NULL, [LocationID] Bigint NULL, [Filter] ntext NULL, [Update] bit NULL, [ExportImages] bit NULL, [ExportSpoilers] bit NULL, [ExportMaps] bit NULL, [OwnRepository] bit NULL, [ExportMapPacks] bit NULL, [MaxLogs] int NULL);");
-                        execSQL("CREATE INDEX [SdfExport_idx] ON [SdfExport] ([Id] ASC);");
-
-                        execSQL("ALTER TABLE [CACHES] ADD [FirstImported] datetime NULL;");
-
-                        execSQL("CREATE TABLE [Category] ([Id]  integer not null primary key autoincrement, [GpxFilename] nvarchar(255) NULL, [Pinned] bit NULL default 0, [CacheCount] int NULL);");
-                        execSQL("CREATE INDEX [Category_idx] ON [Category] ([Id] ASC);");
-
-                        execSQL("ALTER TABLE [GpxFilenames] ADD [CategoryId] bigint NULL;");
-
-                        execSQL("ALTER TABLE [Caches] add [state] nvarchar(50) NULL;");
-                        execSQL("ALTER TABLE [Caches] add [country] nvarchar(50) NULL;");
-                    }
-                    if (lastDatabaseSchemeVersion < 1015) {
-                        // GpxFilenames mit Kategorien verknüpfen
-
-                        // alte Category Tabelle löschen
-                        delete("Category", "", null);
-                        HashMap<Long, String> gpxFilenames = new HashMap<Long, String>();
-                        HashMap<String, Long> categories = new HashMap<String, Long>();
-
-                        try {
-                            SQLiteGdxDatabaseCursor reader = rawQuery("select ID, GPXFilename from GPXFilenames", null);
-                            reader.moveToFirst();
-                            while (!reader.isAfterLast()) {
-                                long id = reader.getLong(0);
-                                String gpxFilename = reader.getString(1);
-                                gpxFilenames.put(id, gpxFilename);
-                                reader.moveToNext();
-                            }
-                            reader.close();
-                        } catch (Exception e) {
-                            //no GPXFilenames stored
-                        }
-                        for (Entry<Long, String> entry : gpxFilenames.entrySet()) {
-                            if (!categories.containsKey(entry.getValue())) {
-                                // add new Category
-                                Categories cs = new Categories();
-                                Category category = cs.createNewCategory(entry.getValue());
-                                // and store
-                                categories.put(entry.getValue(), category.Id);
-                            }
-                            if (categories.containsKey(entry.getValue())) {
-                                // and store CategoryId in GPXFilenames
-                                Parameters args = new Parameters();
-                                args.put("CategoryId", categories.get(entry.getValue()));
-                                try {
-                                    Database.Data.update("GpxFilenames", args, "Id=" + entry.getKey(), null);
-                                } catch (Exception exc) {
-                                    log.error("Update_CategoryId", exc);
-                                }
-                            }
-                        }
-
-                    }
-                    if (lastDatabaseSchemeVersion < 1016) {
-                        execSQL("ALTER TABLE [CACHES] ADD [ApiStatus] smallint NULL default 0;");
-                    }
-                    if (lastDatabaseSchemeVersion < 1017) {
-                        execSQL("CREATE TABLE [Trackable] ([Id] integer not null primary key autoincrement, [Archived] bit NULL, [GcCode] nvarchar (12) NULL, [CacheId] bigint NULL, [CurrentGoal] ntext, [CurrentOwnerName] nvarchar (255) NULL, [DateCreated] datetime NULL, [Description] ntext, [IconUrl] nvarchar (255) NULL, [ImageUrl] nvarchar (255) NULL, [path] nvarchar (255) NULL, [OwnerName] nvarchar (255), [Url] nvarchar (255) NULL);");
-                        execSQL("CREATE INDEX [cacheid_idx] ON [Trackable] ([CacheId] ASC);");
-                        execSQL("CREATE TABLE [TbLogs] ([Id] integer not null primary key autoincrement, [TrackableId] integer not NULL, [CacheID] bigint NULL, [GcCode] nvarchar (12) NULL, [LogIsEncoded] bit NULL DEFAULT 0, [LogText] ntext, [LogTypeId] bigint NULL, [LoggedByName] nvarchar (255) NULL, [Visited] datetime NULL);");
-                        execSQL("CREATE INDEX [trackableid_idx] ON [TbLogs] ([TrackableId] ASC);");
-                        execSQL("CREATE INDEX [trackablecacheid_idx] ON [TBLOGS] ([CacheId] ASC);");
-                    }
-                    if (lastDatabaseSchemeVersion < 1018) {
-                        execSQL("ALTER TABLE [SdfExport] ADD [MapPacks] nvarchar(512) NULL;");
-
-                    }
-                    if (lastDatabaseSchemeVersion < 1019) {
-                        // neue Felder für die erweiterten Attribute einfügen
-                        execSQL("ALTER TABLE [CACHES] ADD [AttributesPositiveHigh] bigint NULL default 0");
-                        execSQL("ALTER TABLE [CACHES] ADD [AttributesNegativeHigh] bigint NULL default 0");
-
-                        // Die Nummerierung der Attribute stimmte nicht mit der von
-                        // Groundspeak überein. Bei 16 und 45 wurde jeweils eine
-                        // Nummber übersprungen
-                        try {
-                            SQLiteGdxDatabaseCursor reader = rawQuery("select Id, AttributesPositive, AttributesNegative from Caches", new String[]{});
-                            reader.moveToFirst();
-                            while (!reader.isAfterLast()) {
-                                long id = reader.getLong(0);
-                                long attributesPositive = reader.getLong(1);
-                                long attributesNegative = reader.getLong(2);
-
-                                attributesPositive = convertAttribute(attributesPositive);
-                                attributesNegative = convertAttribute(attributesNegative);
-
-                                Parameters val = new Parameters();
-                                val.put("AttributesPositive", attributesPositive);
-                                val.put("AttributesNegative", attributesNegative);
-                                String whereClause = "[Id]=" + id;
-                                update("Caches", val, whereClause, null);
-                                reader.moveToNext();
-                            }
-                            reader.close();
-                        } catch (Exception e) {
-                            // no attributes stored
-                        }
-
-                    }
-                    if (lastDatabaseSchemeVersion < 1020) {
-                        // for long Settings
-                        execSQL("ALTER TABLE [Config] ADD [LongString] ntext NULL;");
-
-                    }
-                    if (lastDatabaseSchemeVersion < 1021) {
-                        // Image Table
-                        execSQL("CREATE TABLE [Images] ([Id] integer not null primary key autoincrement, [CacheId] bigint NULL, [GcCode] nvarchar (12) NULL, [Description] ntext, [Name] nvarchar (255) NULL, [ImageUrl] nvarchar (255) NULL, [IsCacheImage] bit NULL);");
-                        execSQL("CREATE INDEX [images_cacheid_idx] ON [Images] ([CacheId] ASC);");
-                        execSQL("CREATE INDEX [images_gccode_idx] ON [Images] ([GcCode] ASC);");
-                        execSQL("CREATE INDEX [images_iscacheimage_idx] ON [Images] ([IsCacheImage] ASC);");
-                        execSQL("CREATE UNIQUE INDEX [images_imageurl_idx] ON [Images] ([ImageUrl] ASC);");
-                    }
-                    if (lastDatabaseSchemeVersion < 1022) {
-                        execSQL("ALTER TABLE [Caches] ALTER COLUMN [GcCode] nvarchar(15) NOT NULL; ");
-
-                        execSQL("ALTER TABLE [Waypoint] DROP CONSTRAINT Waypoint_PK ");
-                        execSQL("ALTER TABLE [Waypoint] ALTER COLUMN [GcCode] nvarchar(15) NOT NULL; ");
-                        execSQL("ALTER TABLE [Waypoint] ADD CONSTRAINT  [Waypoint_PK] PRIMARY KEY ([GcCode]); ");
-
-                        execSQL("ALTER TABLE [Replication] ALTER COLUMN [WpGcCode] nvarchar(15) NOT NULL; ");
-                        execSQL("ALTER TABLE [Trackable] ALTER COLUMN [GcCode] nvarchar(15) NOT NULL; ");
-                        execSQL("ALTER TABLE [TbLogs] ALTER COLUMN [GcCode] nvarchar(15) NOT NULL; ");
-                        execSQL("ALTER TABLE [Images] ALTER COLUMN [GcCode] nvarchar(15) NOT NULL; ");
-                    }
-                    if (lastDatabaseSchemeVersion < 1024) {
-                        execSQL("ALTER TABLE [Waypoint] ADD COLUMN [IsStart] BOOLEAN DEFAULT 'false' NULL");
-                    }
-                    if (lastDatabaseSchemeVersion < 1025) {
-                        // nicht mehr benötigt execSQL("ALTER TABLE [Waypoint] ADD COLUMN [UserNote] ntext NULL");
-                    }
-
-                    if (lastDatabaseSchemeVersion < 1026) {
-                        // add one column for short description
-                        // [ShortDescription] ntext NULL
-                        execSQL("ALTER TABLE [Caches] ADD [ShortDescription] ntext NULL;");
-                    }
-
-                    setTransactionSuccessful();
-                } catch (Exception exc) {
-                    log.error("AlterDatabase", exc);
-                } finally {
-                    endTransaction();
-                }
-
+            case CacheBox3:
+                new AlterCachebox3DB().alterCachebox3DB(this, lastDatabaseSchemeVersion);
                 break;
-            case FieldNotes:
+            case Drafts:
                 beginTransaction();
                 try {
 
                     if (lastDatabaseSchemeVersion <= 0) {
                         // First Initialization of the Database
                         // FieldNotes Table
-                        execSQL("CREATE TABLE [FieldNotes] ([Id] integer not null primary key autoincrement, [CacheId] bigint NULL, [GcCode] nvarchar (12) NULL, [GcId] nvarchar (255) NULL, [Name] nchar (255) NULL, [CacheType] smallint NULL, [Url] nchar (255) NULL, [Timestamp] datetime NULL, [Type] smallint NULL, [FoundNumber] int NULL, [Comment] ntext NULL);");
+                        execSQL("CREATE TABLE [FieldNotes] ([Id] integer not null primary key autoincrement, [CacheId] bigint NULL, [GcCode] nvarchar (12) NULL, [GcId] nvarchar (255) NULL, [name] nchar (255) NULL, [CacheType] smallint NULL, [Url] nchar (255) NULL, [Timestamp] datetime NULL, [Type] smallint NULL, [FoundNumber] int NULL, [Comment] ntext NULL);");
 
                         // Config Table
                         execSQL("CREATE TABLE [Config] ([Key] nvarchar (30) NOT NULL, [Value] nvarchar (255) NULL);");
@@ -579,9 +631,8 @@ public class Database {
                     if (lastDatabaseSchemeVersion < 1007) {
                         execSQL("ALTER TABLE [FieldNotes] ADD COLUMN [directLog] BOOLEAN DEFAULT 'false' NULL");
                     }
-                    setTransactionSuccessful();
                 } catch (Exception exc) {
-                    log.error("AlterDatabase", exc);
+                    log.error("alterDatabase", exc);
                 } finally {
                     endTransaction();
                 }
@@ -591,16 +642,42 @@ public class Database {
                 try {
                     if (lastDatabaseSchemeVersion <= 0) {
                         // First Initialization of the Database
-                        execSQL("CREATE TABLE [Config] ([Key] nvarchar (30) NOT NULL, [Value] nvarchar (255) NULL);");
+                        final DatabaseSchema schema = new DatabaseSchema();
+                        execSQL(schema.CONFIG_TABLE);
                         execSQL("CREATE INDEX [Key_idx] ON [Config] ([Key] ASC);");
+                        return;
                     }
                     if (lastDatabaseSchemeVersion < 1002) {
                         // Long Text Field for long Strings
                         execSQL("ALTER TABLE [Config] ADD [LongString] ntext NULL;");
                     }
-                    setTransactionSuccessful();
+                    if (lastDatabaseSchemeVersion < 1003) {
+                        // Long Text Field for long Strings
+                        execSQL("ALTER TABLE [Config] ADD [desired] ntext NULL;");
+                    }
+                    if (lastDatabaseSchemeVersion < 1004) {
+                        // add primary key on [Key]
+                        String CREATE = "CREATE TABLE ConfigCopy (\n" +
+                                "    [Key]      NVARCHAR (30)  NOT NULL\n" +
+                                "                              PRIMARY KEY\n" +
+                                "                              UNIQUE,\n" +
+                                "    Value      NVARCHAR (255),\n" +
+                                "    LongString NTEXT,\n" +
+                                "    desired    NTEXT\n" +
+                                ");";
+                        String COPY = "INSERT INTO ConfigCopy SELECT * FROM Config;";
+                        String DROP = "DROP TABLE Config;";
+                        String RENAME = "ALTER TABLE ConfigCopy RENAME TO Config;";
+
+                        String SQL = CREATE + COPY + DROP + RENAME;
+                        execSQL(SQL);
+                    }
+                    if (lastDatabaseSchemeVersion < 1005) {
+                        //Extend Config with Blob
+                        execSQL("ALTER TABLE [Config] ADD [blob] BLOB;");
+                    }
                 } catch (Exception exc) {
-                    log.error("AlterDatabase", exc);
+                    log.error("alterDatabase", exc);
                 } finally {
                     endTransaction();
                 }
@@ -608,58 +685,28 @@ public class Database {
         }
     }
 
-    private long convertAttribute(long att) {
-        // Die Nummerierung der Attribute stimmte nicht mit der von Groundspeak
-        // überein. Bei 16 und 45 wurde jeweils eine Nummber übersprungen
-        long result = 0;
-        // Maske für die untersten 15 bit
-        long mask = 0;
-        for (int i = 0; i < 16; i++)
-            mask += (long) 1 << i;
-        // unterste 15 bit ohne Verschiebung kopieren
-        result = att & mask;
-        // Maske für die Bits 16-45
-        mask = 0;
-        for (int i = 16; i < 45; i++)
-            mask += (long) 1 << i;
-        long tmp = att & mask;
-        // Bits 16-44 um eins verschieben
-        tmp = tmp << 1;
-        // und zum Result kopieren
-        result += tmp;
-        // Maske für die Bits 45-45
-        mask = 0;
-        for (int i = 45; i < 63; i++)
-            mask += (long) 1 << i;
-        tmp = att & mask;
-        // Bits 45-63 um 2 verschieben
-        tmp = tmp << 2;
-        // und zum Result kopieren
-        result += tmp;
 
-        return result;
-    }
-
-    public static boolean WaypointExists(String gcCode) {
-        SQLiteGdxDatabaseCursor c = Database.Data.rawQuery("select GcCode from Waypoint where GcCode=@gccode", new String[]{gcCode});
+    public static boolean waypointExists(Database database, String gcCode) {
+        GdxSqliteCursor cursor = database.rawQuery("select GcCode from Waypoints where GcCode=?", new String[]{gcCode});
         {
-            c.moveToFirst();
-            while (!c.isAfterLast()) {
+            if (cursor == null) return false;
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
 
                 try {
-                    c.close();
+                    cursor.close();
                     return true;
                 } catch (Exception e) {
                     return false;
                 }
             }
-            c.close();
+            cursor.close();
 
             return false;
         }
     }
 
-    public static String CreateFreeGcCode(String cacheGcCode) throws Exception {
+    public static String createFreeGcCode(Database database, String cacheGcCode) {
         String suffix = cacheGcCode.substring(2);
         String firstCharCandidates = "CBXADEFGHIJKLMNOPQRSTUVWYZ0123456789";
         String secondCharCandidates = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -667,21 +714,22 @@ public class Database {
         for (int i = 0; i < firstCharCandidates.length(); i++)
             for (int j = 0; j < secondCharCandidates.length(); j++) {
                 String gcCode = firstCharCandidates.substring(i, i + 1) + secondCharCandidates.substring(j, j + 1) + suffix;
-                if (!WaypointExists(gcCode))
+                if (!waypointExists(database, gcCode))
                     return gcCode;
             }
-        throw new Exception("Alle GcCodes sind bereits vergeben! Dies sollte eigentlich nie vorkommen!");
+        throw new RuntimeException("Alle GcCodes sind bereits vergeben! Dies sollte eigentlich nie vorkommen!");
     }
 
 
-    public static String GetNote(long cacheId) {
+    public static String getNote(long cacheId) {
         String resultString = "";
-        SQLiteGdxDatabaseCursor c = Database.Data.rawQuery("select Notes from Caches where Id=?", new String[]{String.valueOf(cacheId)});
-        c.moveToFirst();
-        while (!c.isAfterLast()) {
-            resultString = c.getString(0);
+        GdxSqliteCursor cursor = Database.Data.rawQuery("select Notes from Caches where Id=?", new String[]{String.valueOf(cacheId)});
+        cursor.moveToFirst();
+        while (!cursor.isAfterLast()) {
+            resultString = cursor.getString(0);
             break;
         }
+        cursor.close();
         return resultString;
     }
 
@@ -691,7 +739,7 @@ public class Database {
      * @param cacheId
      * @param value
      */
-    public static void SetNote(long cacheId, String value) {
+    public static void setNote(long cacheId, String value) {
         Parameters args = new Parameters();
         args.put("Notes", value);
         args.put("HasUserData", true);
@@ -699,24 +747,27 @@ public class Database {
         Database.Data.update("Caches", args, "id=" + cacheId, null);
     }
 
-    public static void SetFound(long cacheId, boolean value) {
+    public static void setFound(long cacheId, boolean value) {
         Parameters args = new Parameters();
         args.put("found", value);
         Database.Data.update("Caches", args, "id=" + cacheId, null);
     }
 
-    public static String GetSolver(long cacheId) {
+    public static String getSolver(long cacheId) {
+        GdxSqliteCursor cursor = null;
         try {
             String resultString = "";
-            SQLiteGdxDatabaseCursor c = Database.Data.rawQuery("select Solver from Caches where Id=?", new String[]{String.valueOf(cacheId)});
-            c.moveToFirst();
-            while (!c.isAfterLast()) {
-                resultString = c.getString(0);
+            cursor = Database.Data.rawQuery("select Solver from Caches where Id=?", new String[]{String.valueOf(cacheId)});
+            cursor.moveToFirst();
+            while (!cursor.isAfterLast()) {
+                resultString = cursor.getString(0);
                 break;
             }
             return resultString;
         } catch (Exception ex) {
             return "";
+        } finally {
+            if (cursor != null) cursor.close();
         }
     }
 
@@ -726,7 +777,7 @@ public class Database {
      * @param cacheId
      * @param value
      */
-    public static void SetSolver(long cacheId, String value) {
+    public static void setSolver(long cacheId, String value) {
         Parameters args = new Parameters();
         args.put("Solver", value);
         args.put("HasUserData", true);
@@ -738,9 +789,9 @@ public class Database {
      * @param minToKeep      Config.settings.LogMinCount.getValue()
      * @param LogMaxMonthAge Config.settings.LogMaxMonthAge.getValue()
      */
-    public void DeleteOldLogs(int minToKeep, int LogMaxMonthAge) {
+    public void deleteOldLogs(int minToKeep, int LogMaxMonthAge) {
 
-        log.debug("DeleteOldLogs but keep " + minToKeep + " and not older than " + LogMaxMonthAge);
+        log.debug("deleteOldLogs but keep " + minToKeep + " and not older than " + LogMaxMonthAge);
         if (LogMaxMonthAge == 0) {
             // Setting are 'immediately'
             // Delete all Logs and return
@@ -756,30 +807,34 @@ public class Database {
         String TimeStamp = (now.get(Calendar.YEAR)) + "-" + String.format("%02d", (now.get(Calendar.MONTH) + 1)) + "-" + String.format("%02d", now.get(Calendar.DATE));
 
         // #############################################################################
-        // Get CacheId's from Caches with older logs and having more logs than minToKeep
+        // get CacheId's from Caches with older logs and having more logs than minToKeep
         // #############################################################################
         {
+            GdxSqliteCursor cursor = null;
             try {
                 String command = "SELECT cacheid FROM logs WHERE Timestamp < '" + TimeStamp + "' GROUP BY CacheId HAVING COUNT(Id) > " + String.valueOf(minToKeep);
                 log.debug(command);
-                SQLiteGdxDatabaseCursor reader = Database.Data.rawQuery(command, null);
-                reader.moveToFirst();
-                while (!reader.isAfterLast()) {
-                    long tmp = reader.getLong(0);
+                cursor = Database.Data.rawQuery(command, (String[]) null);
+                cursor.moveToFirst();
+                while (!cursor.isAfterLast()) {
+                    long tmp = cursor.getLong(0);
                     if (!oldLogCaches.contains(tmp))
-                        oldLogCaches.add(reader.getLong(0));
-                    reader.moveToNext();
+                        oldLogCaches.add(cursor.getLong(0));
+                    cursor.moveToNext();
                 }
-                reader.close();
+                cursor.close();
             } catch (Exception ex) {
-                log.error("DeleteOldLogs", ex);
+                log.error("deleteOldLogs", ex);
+            } finally {
+                if (cursor != null) cursor.close();
             }
         }
 
         // ###################################################
-        // Get Logs
+        // get Logs
         // ###################################################
         {
+            GdxSqliteCursor cursor = null;
             try {
                 beginTransaction();
                 for (long oldLogCache : oldLogCaches) {
@@ -787,13 +842,13 @@ public class Database {
                     String command = "select id from logs where cacheid = " + String.valueOf(oldLogCache) + " order by Timestamp desc";
                     log.debug(command);
                     int count = 0;
-                    SQLiteGdxDatabaseCursor reader = Database.Data.rawQuery(command, null);
-                    reader.moveToFirst();
-                    while (!reader.isAfterLast()) {
+                    cursor = Database.Data.rawQuery(command, (String[]) null);
+                    cursor.moveToFirst();
+                    while (!cursor.isAfterLast()) {
                         if (count == minToKeep)
                             break;
-                        minLogIds.add(reader.getLong(0));
-                        reader.moveToNext();
+                        minLogIds.add(cursor.getLong(0));
+                        cursor.moveToNext();
                         count++;
                     }
                     StringBuilder sb = new StringBuilder();
@@ -808,10 +863,11 @@ public class Database {
                     log.debug(delCommand);
                     Database.Data.execSQL(delCommand);
                 }
-                setTransactionSuccessful();
+                endTransaction();
             } catch (Exception ex) {
-                log.error("DeleteOldLogs", ex);
+                log.error("deleteOldLogs", ex);
             } finally {
+                if (cursor != null) cursor.close();
                 endTransaction();
             }
         }
@@ -820,22 +876,39 @@ public class Database {
 
     // DB Funktionen
 
-    public void Initialize() {
+    public void initialize() {
         if (myDB == null) {
-            if (!databasePath.exists())
-                Reset();
 
-            try {
-                log.debug("open data base: " + databasePath);
-                myDB = SQLiteGdxDatabaseFactory.getNewDatabase(databasePath);
-                myDB.openOrCreateDatabase();
-            } catch (Exception exc) {
-                return;
+            if (inMemoryName != null) {
+                try {
+                    log.debug("open data base: " + inMemoryName);
+                    myDB = new GdxSqlite();
+                    myDB.openOrCreateDatabase();
+                } catch (Exception exc) {
+                    log.error("Can't open Database", exc);
+                }
+            } else {
+                if (!databasePath.exists())
+                    reset();
+
+                try {
+                    log.debug("open data base: " + databasePath);
+                    myDB = new GdxSqlite(databasePath);
+                    myDB.openOrCreateDatabase();
+
+                    //set PRAGMAS
+                    myDB.execSQL("PRAGMA synchronous = OFF");
+                    myDB.execSQL("PRAGMA journal_mode = MEMORY");
+
+
+                } catch (Exception exc) {
+                    log.error("Can't open Database", exc);
+                }
             }
         }
     }
 
-    public void Reset() {
+    public void reset() {
         // if exists, delete old database file
         if (databasePath.exists()) {
             log.debug("RESET DB, delete file: " + databasePath);
@@ -844,9 +917,8 @@ public class Database {
 
         try {
             log.debug("create data base: " + databasePath);
-            myDB = SQLiteGdxDatabaseFactory.getNewDatabase(databasePath);
+            myDB = new GdxSqlite(databasePath);
             myDB.openOrCreateDatabase();
-            myDB.setTransactionSuccessful();
             myDB.closeDatabase();
 
         } catch (Exception exc) {
@@ -854,69 +926,322 @@ public class Database {
         }
     }
 
-
-    public SQLiteGdxDatabaseCursor rawQuery(String sql, String[] args) {
+    public synchronized GdxSqliteCursor rawQuery(String sql) {
+        if (myDB == null) return null;
         try {
-            return myDB.rawQuery(sql, args);
+            return myDB.rawQuery(sql);
         } catch (SQLiteGdxException e) {
-            e.printStackTrace();
+            log.error("rawQuerry:" + sql, e);
         }
         return null;
+    }
+
+    public synchronized GdxSqliteCursor rawQuery(String sql, String[] args) {
+        if (myDB == null) return null;
+        try {
+
+            if (args != null) {
+                for (int i = 0; i < args.length; i++) {
+                    sql = sql.replaceFirst("\\?", "'" + args[i] + "'");
+                }
+            }
+            return myDB.rawQuery(sql);
+        } catch (SQLiteGdxException e) {
+            log.error("rawQuerry:" + sql, e);
+        }
+        return null;
+    }
+
+    public synchronized void rawQuery(String sql, GdxSqlite.RowCallback callback) {
+        if (myDB == null) return;
+        myDB.rawQuery(sql, callback);
     }
 
     public void execSQL(String sql) {
         try {
             myDB.execSQL(sql);
         } catch (SQLiteGdxException e) {
-            e.printStackTrace();
+            log.error("execSQL", e);
         }
     }
 
 
-    public long update(String tablename, Parameters val, String whereClause, String[] whereArgs) {
-        return myDB.update(tablename, val, whereClause, whereArgs);
+    public synchronized long update(String tablename, Parameters val, String whereClause, String[] whereArgs) {
+
+        if (val == null || val.size() <= 0) {
+            //nothing to update
+            return 0;
+        }
+
+        if (CB.isLogLevel(CB.LOG_LEVEL_DEBUG)) {
+            StringBuilder sb = new StringBuilder("Update @ Table:" + tablename);
+            sb.append("Parameters:" + val.toString());
+            sb.append("WHERECLAUSE:" + whereClause);
+
+            if (whereArgs != null) {
+                for (String arg : whereArgs) {
+                    sb.append(arg + ", ");
+                }
+            }
+
+            log.debug(sb.toString());
+        }
+
+        if (myDB == null)
+            return 0;
+
+        StringBuilder sql = new StringBuilder();
+
+        sql.append("update ");
+        sql.append(tablename);
+        sql.append(" set");
+
+        int i = 0;
+        for (Map.Entry<String, Object> entry : val.entrySet()) {
+            i++;
+            sql.append(" ");
+            sql.append(entry.getKey());
+            sql.append("=?");
+            if (i != val.size()) {
+                sql.append(",");
+            }
+        }
+
+        if (!whereClause.isEmpty()) {
+            if (!whereClause.toLowerCase().contains("where")) {
+                sql.append(" WHERE");
+            }
+            sql.append(" ");
+            sql.append(whereClause);
+        }
+        GdxSqlitePreparedStatement st = null;
+        try {
+            st = myDB.prepare(sql.toString());
+
+            int j = 0;
+            for (Map.Entry<String, Object> entry : val.entrySet()) {
+                j++;
+                st.bind(j, entry.getValue());
+            }
+
+            if (whereArgs != null) {
+                for (int k = 0; k < whereArgs.length; k++) {
+                    st.bind(j + k + 1, whereArgs[k]);
+                }
+            }
+            st.commit();
+            return myDB.changes();
+
+        } catch (SQLiteGdxException e) {
+            if (e.getMessage().contains("near")) {
+                log.error("UPDATE:", sql.toString());
+            } else {
+                log.error("UPDATE:" + sql.toString(), e);
+            }
+            return 0;
+        } finally {
+            try {
+                if (st != null) st.close();
+            } catch (SQLiteGdxException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     public long insert(String tablename, Parameters val) {
-        return myDB.insert(tablename, val);
+        StringBuilder sql = new StringBuilder();
+
+        sql.append("insert into ");
+        sql.append(tablename);
+        sql.append(" (");
+
+        int i = 0;
+        for (Map.Entry<String, Object> entry : val.entrySet()) {
+            i++;
+            sql.append(" ");
+            sql.append(entry.getKey());
+            if (i != val.size()) {
+                sql.append(",");
+            }
+        }
+
+        sql.append(" ) Values(");
+
+        for (int k = 1; k <= val.size(); k++) {
+            sql.append(" ");
+            sql.append("?");
+            if (k < val.size()) {
+                sql.append(",");
+            }
+        }
+
+        sql.append(" )");
+        GdxSqlitePreparedStatement st = null;
+        try {
+            st = myDB.prepare(sql.toString());
+
+            int j = 0;
+            for (Map.Entry<String, Object> entry : val.entrySet()) {
+                j++;
+                st.bind(j, entry.getValue());
+            }
+
+            log.debug("INSERT: " + sql);
+            st.commit();
+            return myDB.changes();
+        } catch (SQLiteGdxException e) {
+            log.error("INSERT", e);
+            return 0;
+        } finally {
+            try {
+                if (st != null) st.close();
+            } catch (SQLiteGdxException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
-    public long delete(String tablename, String whereClause, String[] whereArgs) {
-        return myDB.delete(tablename, whereClause, whereArgs);
+    public int delete(String tablename, String whereClause) {
+        StringBuilder sql = new StringBuilder();
+
+        sql.append("delete from ");
+        sql.append(tablename);
+
+        if (!whereClause.isEmpty()) {
+            sql.append(" where ");
+            sql.append(whereClause);
+        }
+
+        myDB.execSQL(sql.toString());
+        return myDB.changes();
     }
 
     public void beginTransaction() {
-        // log.trace("begin transaction");
-        if (myDB != null)
-            myDB.setAutoCommit(false);
-    }
+        log.debug("begin transaction");
+        if (EXCLUSIVE_ID.get() != -1) {
+            log.warn("Can't start Transaction is Exclusive for ID: " + EXCLUSIVE_ID.get());
+            return;
+        }
 
-    public void setTransactionSuccessful() {
-        //  log.trace("begin transaction");
         if (myDB != null)
-            myDB.setTransactionSuccessful();
+            myDB.beginTransaction();
     }
 
     public void endTransaction() {
-        // log.trace("begin transaction");
+        log.debug("end transaction");
+        if (EXCLUSIVE_ID.get() != -1) {
+            log.warn("Can't end Transaction is Exclusive for ID: " + EXCLUSIVE_ID.get());
+            return;
+        }
         if (myDB != null)
             myDB.endTransaction();
     }
 
-    public long insertWithConflictReplace(String tablename, Parameters val) {
-        return myDB.insertWithConflictReplace(tablename, val);
+    public void endTransactionExclusive(int id) {
+        if (EXCLUSIVE_ID.get() != id)
+            throw new RuntimeException("Wrong Exclusive ID: " + id);
+        EXCLUSIVE_ID.set(-1);
+        if (myDB != null)
+            myDB.endTransaction();
     }
 
-    public long insertWithConflictIgnore(String tablename, Parameters val) {
-        return myDB.insertWithConflictIgnore(tablename, val);
+    public void beginTransactionExclusive(int id) {
+        if (EXCLUSIVE_ID.get() != -1)
+            throw new RuntimeException("Can't begin Transaction Exclusive! ID is Exclusive: " + EXCLUSIVE_ID.get());
+        EXCLUSIVE_ID.set(id);
+        if (myDB != null)
+            myDB.beginTransaction();
     }
 
-    public void Close() {
+    public void insertWithConflictReplace(String tablename, Parameters val) {
+        insert(tablename, val, "INSERT OR REPLACE into ");
+    }
+
+    public void insertWithConflictIgnore(String tablename, Parameters val) {
+        insert(tablename, val, "INSERT OR IGNORE into ");
+    }
+
+    private void insert(String tablename, Parameters val, String sqlInsert) {
+        StringBuilder sql = new StringBuilder();
+
+        sql.append(sqlInsert);
+        sql.append(tablename);
+        sql.append(" (");
+
+        int i = 0;
+        for (Map.Entry<String, Object> entry : val.entrySet()) {
+            i++;
+            sql.append(" ");
+            sql.append(entry.getKey());
+            if (i != val.size()) {
+                sql.append(",");
+            }
+        }
+
+        sql.append(" ) Values(");
+
+        for (int k = 1; k <= val.size(); k++) {
+            sql.append(" ");
+            sql.append("?");
+            if (k < val.size()) {
+                sql.append(",");
+            }
+        }
+
+        sql.append(" )");
+        GdxSqlitePreparedStatement st = null;
+        try {
+            st = myDB.prepare(sql.toString());
+
+            int j = 0;
+            for (Map.Entry<String, Object> entry : val.entrySet()) {
+                j++;
+                st.bind(j, entry.getValue());
+            }
+
+            st.commit();
+
+
+        } catch (SQLiteGdxException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                st.close();
+            } catch (SQLiteGdxException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+    public void close() {
+        if (myDB == null) return;
         try {
             myDB.closeDatabase();
         } catch (SQLiteGdxException e) {
-            e.printStackTrace();
+            log.error("Close Database {}", databaseType, e);
         }
+    }
+
+    public void open() {
+        if (myDB == null) return;
+        try {
+            myDB.openOrCreateDatabase();
+        } catch (SQLiteGdxException e) {
+            log.error("Open Database {}", databaseType, e);
+        }
+    }
+
+    public int getCacheCountOnThisDB() {
+        try {
+            return getCacheCount(this.myDB);
+        } catch (SQLiteGdxException e) {
+            return -1;
+        }
+    }
+
+    public boolean isInMemory() {
+        return inMemoryName != null;
     }
 
     // Static methods ##############################################################################################
@@ -924,16 +1249,109 @@ public class Database {
 
     public static int getCacheCountInDB(String absolutePath) {
         try {
-            SQLiteGdxDatabase tempDB = SQLiteGdxDatabaseFactory.getNewDatabase(Gdx.files.absolute(absolutePath));
+            GdxSqlite tempDB = new GdxSqlite(Gdx.files.absolute(absolutePath));
             tempDB.openOrCreateDatabase();
-            SQLiteGdxDatabaseCursor result = tempDB.rawQuery("SELECT COUNT(*) FROM caches", null);
-            result.moveToFirst();
-            int count = result.getInt(1);
-            result.close();
+            int count = getCacheCount(tempDB);
             tempDB.closeDatabase();
             return count;
         } catch (Exception exc) {
             return -1;
         }
     }
+
+    private static int getCacheCount(GdxSqlite tempDB) throws SQLiteGdxException {
+        //get schema version
+        GdxSqliteCursor cursor = tempDB.rawQuery("SELECT Value FROM Config WHERE [Key] like 'DatabaseSchemeVersionWin'");
+        cursor.moveToFirst();
+        int version = Integer.parseInt(cursor.getString(0));
+        cursor.close();
+        if (version < 1028) {
+            cursor = tempDB.rawQuery("SELECT COUNT(*) FROM caches");
+        } else {
+            cursor = tempDB.rawQuery("SELECT COUNT(*) FROM CacheCoreInfo");
+        }
+
+
+        cursor.moveToFirst();
+        int count = cursor.getInt(0);
+        cursor.close();
+        return count;
+    }
+
+    public static boolean createNewDB(Database database, FileHandle rootFolder, String newDB_Name, boolean ownRepository, boolean... dontStoreConfig) {
+
+        final Logger logger = LoggerFactory.getLogger("CREATE NEW DB");
+
+        if (CB.viewmanager != null) CB.viewmanager.setNewFilter(FilterInstances.ALL); // in case of JUnit
+        FileHandle dbFile = rootFolder.child(newDB_Name + ".db3");
+        try {
+            database.close();
+            database.startUp(dbFile);
+        } catch (SQLiteGdxException e) {
+            logger.error("Create new DB", e);
+            return true;
+        }
+        // OwnRepository?
+        if (ownRepository) {
+            String folder = "?/" + newDB_Name + "/";
+
+            Config.DescriptionImageFolderLocal.setValue(folder + "Images");
+            Config.MapPackFolderLocal.setValue(folder + "Maps");
+            Config.SpoilerFolderLocal.setValue(folder + "Spoilers");
+            Config.TileCacheFolderLocal.setValue(folder + "Cache");
+            if (dontStoreConfig == null) {
+                Config.AcceptChanges();
+            }
+            logger.debug(
+                    newDB_Name + " has own Repository:\n" + //
+                            Config.DescriptionImageFolderLocal.getValue() + ", \n" + //
+                            Config.MapPackFolderLocal.getValue() + ", \n" + //
+                            Config.SpoilerFolderLocal.getValue() + ", \n" + //
+                            Config.TileCacheFolderLocal.getValue()//
+            );
+
+            // Create Folder?
+            boolean creationOK = Utils.createDirectory(Config.DescriptionImageFolderLocal.getValue());
+            creationOK = creationOK && Utils.createDirectory(Config.MapPackFolderLocal.getValue());
+            creationOK = creationOK && Utils.createDirectory(Config.SpoilerFolderLocal.getValue());
+            creationOK = creationOK && Utils.createDirectory(Config.TileCacheFolderLocal.getValue());
+            if (!creationOK)
+                logger.debug(
+                        "Problem with creation of one of the Directories:" + //
+                                Config.DescriptionImageFolderLocal.getValue() + ", " + //
+                                Config.MapPackFolderLocal.getValue() + ", " + //
+                                Config.SpoilerFolderLocal.getValue() + ", " + //
+                                Config.TileCacheFolderLocal.getValue()//
+                );
+        }
+        return false;
+    }
+
+    public static void createNewInMemoryDB(Database database, String dbName) {
+        final Logger logger = LoggerFactory.getLogger("CREATE NEW DB");
+
+        if (CB.viewmanager != null) CB.viewmanager.setNewFilter(FilterInstances.ALL); // in case of JUnit
+
+        database.inMemoryName = dbName;
+
+        try {
+            database.close();
+            database.startUp();
+        } catch (SQLiteGdxException e) {
+            logger.error("Create new DB", e);
+        }
+    }
+
+
+    public static Date getDateFromDataBaseString(String dateString) {
+        if (dateString == null || dateString.isEmpty()) return new Date();
+
+        try {
+            return Database.cbDbFormat.parse(dateString);
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        return new Date();
+    }
+
 }

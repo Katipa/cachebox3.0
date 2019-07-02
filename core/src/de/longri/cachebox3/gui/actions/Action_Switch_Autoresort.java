@@ -25,7 +25,7 @@ import de.longri.cachebox3.gui.menu.MenuID;
 public class Action_Switch_Autoresort extends AbstractAction {
 
     public Action_Switch_Autoresort() {
-        super("AutoResort", MenuID.AID_AUTO_RESORT);
+        super(NOT_IMPLEMENTED, "AutoResort", MenuID.AID_AUTO_RESORT);
     }
 
     @Override
@@ -35,9 +35,9 @@ public class Action_Switch_Autoresort extends AbstractAction {
 
 //        GlobalCore.setAutoResort(!(GlobalCore.getAutoResort()));
 //        if (GlobalCore.getAutoResort()) {
-//            synchronized (Database.Data.Query) {
+//            synchronized (Database.Data.cacheList) {
 //                if (GlobalCore.isSetSelectedCache()) {
-//                    CacheWithWP ret = Database.Data.Query.Resort(GlobalCore.getSelectedCoord(), new CacheWithWP(GlobalCore.getSelectedCache(), GlobalCore.getSelectedWaypoint()));
+//                    CacheWithWP ret = Database.Data.cacheList.Resort(GlobalCore.getSelectedCoord(), new CacheWithWP(GlobalCore.getSelectedCache(), GlobalCore.getSelectedWaypoint()));
 //                    GlobalCore.setSelectedWaypoint(ret.getCache(), ret.getWaypoint(), false);
 //                    GlobalCore.setNearestCache(ret.getCache());
 //                    ret.dispose();
@@ -48,7 +48,7 @@ public class Action_Switch_Autoresort extends AbstractAction {
 
     @Override
     public Drawable getIcon() {
-        return CB.getSkin().getMenuIcon.autoSortOffIcon ;
+        return CB.getSkin().getMenuIcon.autoSortOffIcon;
     }
 
 }

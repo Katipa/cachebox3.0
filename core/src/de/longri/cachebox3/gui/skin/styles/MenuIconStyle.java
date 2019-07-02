@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 team-cachebox.de
+ * Copyright (C) 2017 - 2019 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -24,18 +24,21 @@ import de.longri.cachebox3.CB;
 public class MenuIconStyle extends AbstractIconStyle {
 
 
-    @Override
-    protected int getPrefWidth() {
-        return (int) CB.scaledSizes.ICON_WIDTH;
-    }
-
-    @Override
-    protected int getPrefHeight() {
-        return (int) CB.scaledSizes.ICON_WIDTH;
-    }
-
+    public Drawable baseMapOnlineVector;
+    public Drawable baseMapOnlineBitmap;
+    public Drawable baseMapMapsforge;
+    public Drawable baseMapFreizeitkarte;
+    public Drawable target;
+    public Drawable mapLayer;
+    public Drawable deleteAllDrafts;
+    public Drawable ownerLogTypes;
+    public Drawable edit;
+    public Drawable fileTransfer;
+    public Drawable favPoint;
+    public Drawable theme;
+    public Drawable themeStyle;
+    public Drawable import_PQ;
     public Drawable favorit;
-
     public Drawable docIcon;
     public Drawable addCacheIcon;
     public Drawable deleteIcon;
@@ -46,18 +49,25 @@ public class MenuIconStyle extends AbstractIconStyle {
     public Drawable importIcon;
     public Drawable cacheListIcon;
     public Drawable addWp;
+    public Drawable delWp;
+    public Drawable projectWp;
+    public Drawable showWp;
+    public Drawable editWp;
+    public Drawable mesureWp;
     public Drawable navigate;
     public Drawable fieldNote;
     public Drawable videoIcon;
     public Drawable voiceRecIcon;
-    public Drawable hintIcon;
+    public Drawable hintIconOn;
+    public Drawable hintIconOff;
     public Drawable my_parking;
     public Drawable autoSortOffIcon;
     public Drawable torchOn;
     public Drawable torchOff;
+    public Drawable torchDisabled;
     public Drawable takePhoto;
     public Drawable dayNight;
-    public Drawable uploadFieldNote;
+    public Drawable uploadDraft;
     public Drawable manageDB;
     public Drawable settingsIcon;
     public Drawable compassIcon;
@@ -75,4 +85,31 @@ public class MenuIconStyle extends AbstractIconStyle {
     public Drawable waypointListIcon;
     public Drawable trackListIcon;
     public Drawable GC_Live;
+    public Drawable gc_logo;
+    public Drawable viewSettings;
+    public Drawable reloadCacheIcon;
+    public Drawable deleteCaches;
+    public Drawable deleteFilter;
+    public Drawable deleteArchieved;
+    public Drawable deleteFounds;
+    public Drawable gpxFile;
+    public Drawable friends;
+    public Drawable friendsLogs;
+    public Drawable downloadLogs;
+    public Drawable downloadFriendsLogs;
+    public Drawable downloadLogImages;
+    public Drawable showOriginalHtmlColor;
+    public Drawable todo;
+
+    @Override
+    public int getPrefWidth() {
+        return CB.getScaledInt(47);
+    }
+
+    @Override
+    public int getPrefHeight() {
+        return CB.getScaledInt(47);
+    }
+
+
 }

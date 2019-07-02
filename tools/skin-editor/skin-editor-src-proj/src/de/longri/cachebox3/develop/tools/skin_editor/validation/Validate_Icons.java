@@ -14,23 +14,29 @@ public class Validate_Icons extends Validate_Abstract_Icons {
         super(game, validationSkin, stage, IconsStyle.class);
     }
 
+
+    @Override
+    public String getName() {
+        return "Are all icons available";
+    }
+
     @Override
     protected int getMinWidth() {
-        return (int) CB.getScaledFloat(17);
+        return validationSkin.getIcon.getPrefWidth() - TOLLERANCE;
     }
 
     @Override
     protected int getMaxWidth() {
-        return (int) CB.getScaledFloat(27);
+        return validationSkin.getIcon.getPrefWidth() + TOLLERANCE;
     }
 
     @Override
     protected int getMinHeight() {
-        return (int) CB.getScaledFloat(17);
+        return validationSkin.getIcon.getPrefHeight() - TOLLERANCE;
     }
 
     @Override
     protected int getMaxHeight() {
-        return (int) CB.getScaledFloat(27);
+        return validationSkin.getIcon.getPrefHeight() + TOLLERANCE;
     }
 }

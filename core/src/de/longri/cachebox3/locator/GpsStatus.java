@@ -16,6 +16,8 @@
 
 package de.longri.cachebox3.locator;
 
+import de.longri.cachebox3.locator.manager.LocationManager;
+
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -34,7 +36,7 @@ public final class GpsStatus {
 	private final GpsSatellite mSatellites[] = new GpsSatellite[NUM_SATELLITES];
 
 	/**
-	 * @author Longri_2
+	 * @author Longri
 	 */
 	private final class SatelliteIterator implements Iterator<GpsSatellite> {
 
@@ -94,13 +96,13 @@ public final class GpsStatus {
 	public static final int GPS_EVENT_STOPPED = 2;
 
 	/**
-	 * Event sent when the GPS system has received its first fix since starting. Call {@link #getTimeToFirstFix()} to find the time from
+	 * Event sent when the GPS system has received its first fix since starting. call {@link #getTimeToFirstFix()} to find the time from
 	 * start to first fix.
 	 */
 	public static final int GPS_EVENT_FIRST_FIX = 3;
 
 	/**
-	 * Event sent periodically to report GPS satellite status. Call {@link #getSatellites()} to retrieve the status for each satellite.
+	 * Event sent periodically to report GPS satellite status. call {@link #getSatellites()} to retrieve the status for each satellite.
 	 */
 	public static final int GPS_EVENT_SATELLITE_STATUS = 4;
 

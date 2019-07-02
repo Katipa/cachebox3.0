@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2011-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
@@ -16,8 +16,11 @@
 package de.longri.cachebox3.settings.types;
 
 
+import com.badlogic.gdx.utils.Array;
 import de.longri.cachebox3.utils.IChanged;
 import de.longri.cachebox3.utils.lists.CB_List;
+
+import java.util.Calendar;
 
 /**
  * @author ging-buh
@@ -27,7 +30,7 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
 
     final public String name;
 
-    protected CB_List<IChanged> ChangedEventList = new CB_List<IChanged>();
+    protected CB_List<IChanged> changedEventList = new CB_List<>();
     protected de.longri.cachebox3.settings.types.SettingCategory category;
 
     protected de.longri.cachebox3.settings.types.SettingMode mode;
@@ -39,50 +42,68 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
     protected T lastValue;
     protected boolean needRestart = false;
 
-    /**
-     * saves whether this setting is changed and needs to be saved
-     */
-    protected boolean dirty;
+    Array<SettingBase<?>> dirtyList;
 
     private static int indexCount = 0;
     private int index = -1;
 
-    public SettingBase(String name, de.longri.cachebox3.settings.types.SettingCategory category, de.longri.cachebox3.settings.types.SettingMode modus, de.longri.cachebox3.settings.types.SettingStoreType StoreType, de.longri.cachebox3.settings.types.SettingUsage usage) {
+    public long expiredTime = -1L;
+
+    public SettingBase(String name, SettingCategory category, SettingMode modus, SettingStoreType StoreType, SettingUsage usage, boolean desired) {
+
+        if (name.length() > 30) throw new IllegalStateException("Name length can't longer then 30 characters");
+
         this.name = name;
         this.category = category;
         this.mode = modus;
         this.storeType = StoreType;
         this.usage = usage;
-        this.dirty = false;
-
         this.index = indexCount++;
+        if (desired) {
+            //set to zero (value -1 means that this setting has no desired value)
+            //if desired time not set, so the value is desired
+            expiredTime = 0;
+        } else {
+            expiredTime = -1;
+        }
     }
 
     public void addChangedEventListener(IChanged listener) {
-        synchronized (ChangedEventList) {
-            if (!ChangedEventList.contains(listener))
-                ChangedEventList.add(listener);
+        synchronized (changedEventList) {
+            if (!changedEventList.contains(listener, true))
+                changedEventList.add(listener);
         }
     }
 
     public void removeChangedEventListener(IChanged listener) {
-        synchronized (ChangedEventList) {
-            ChangedEventList.remove(listener);
+        synchronized (changedEventList) {
+            changedEventList.removeValue(listener, true);
         }
     }
 
     public boolean isDirty() {
-        return dirty;
+        return this.dirtyList.contains(this, true);
     }
 
-    public void setDirty() {
-        dirty = true;
-        fireChangedEvent();
+    void setDirty() {
+        if (!this.dirtyList.contains(this, true))
+            this.dirtyList.add(this);
     }
 
     public void clearDirty() {
-        dirty = false;
+        this.dirtyList.removeValue(this, true);
     }
+
+    public void setExpiredTime(long time) {
+        this.expiredTime = time;
+        this.setDirty();
+    }
+
+    public boolean isExpired() {
+        if (expiredTime == -1L) return false;
+        return Calendar.getInstance().getTimeInMillis() > expiredTime;
+    }
+
 
     public String getName() {
         return name;
@@ -104,24 +125,24 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
         this.mode = mode;
     }
 
-    public abstract String toDBString();
+    public abstract Object toDbValue();
 
-    public abstract boolean fromDBString(String dbString);
+    public abstract boolean fromDbvalue(Object dbString);
 
     @Override
     public int compareTo(SettingBase<T> o) {
         return Double.compare(o.index, this.index);
     }
 
-    private void fireChangedEvent() {
-        synchronized (ChangedEventList) {
+    public void fireChangedEvent() {
+        synchronized (changedEventList) {
             // do this at new Thread, dont't block Ui-Thread
 
             Thread th = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    for (int i = 0, n = ChangedEventList.size(); i < n; i++) {
-                        IChanged event = ChangedEventList.get(i);
+                    for (int i = 0, n = changedEventList.size; i < n; i++) {
+                        IChanged event = changedEventList.get(i);
                         event.isChanged();
                     }
                 }
@@ -139,6 +160,9 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
     }
 
     protected boolean ifValueEquals(T newValue) {
+        if (this.value == null) {
+            return newValue == null;
+        }
         return this.value.equals(newValue);
     }
 
@@ -165,7 +189,7 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
 
     public void loadFromLastValue() {
         if (lastValue == null)
-            throw new IllegalArgumentException("You have never saved the last value! Call SaveToLastValue()");
+            throw new IllegalArgumentException("You have never saved the last value of '" + name + "'! Call SaveToLastValue()");
         value = lastValue;
     }
 
@@ -188,6 +212,7 @@ public abstract class SettingBase<T> implements Comparable<SettingBase<T>> {
     }
 
     public boolean isDefault() {
+        if (value == null && defaultValue == null) return true;
         return value.equals(defaultValue);
     }
 

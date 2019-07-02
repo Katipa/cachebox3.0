@@ -1,18 +1,9 @@
 package org.mapsforge.map.swing.view;
 
-import java.awt.Button;
-import java.awt.Dimension;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.File;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
-
-import javax.swing.*;
-import javax.swing.filechooser.FileFilter;
-
-import de.longri.cachebox3.locator.Location;
-import de.longri.cachebox3.locator.Locator;
+import ch.fhnw.imvs.gpssimulator.SimulatorMain;
+import ch.fhnw.imvs.gpssimulator.data.GPSData;
+import ch.fhnw.imvs.gpssimulator.data.GPSDataListener;
+import de.longri.cachebox3.events.location.LocationEvents;
 import org.mapsforge.core.graphics.GraphicFactory;
 import org.mapsforge.core.model.LatLong;
 import org.mapsforge.map.awt.graphics.AwtGraphicFactory;
@@ -27,16 +18,21 @@ import org.mapsforge.map.layer.cache.InMemoryTileCache;
 import org.mapsforge.map.layer.cache.TileCache;
 import org.mapsforge.map.layer.cache.TwoLevelTileCache;
 import org.mapsforge.map.layer.renderer.TileRendererLayer;
+import org.mapsforge.map.model.IMapViewPosition;
 import org.mapsforge.map.model.MapViewPosition;
 import org.mapsforge.map.model.Model;
 import org.mapsforge.map.model.common.PreferencesFacade;
 import org.mapsforge.map.reader.MapFile;
 import org.mapsforge.map.rendertheme.InternalRenderTheme;
 
-
-import ch.fhnw.imvs.gpssimulator.SimulatorMain;
-import ch.fhnw.imvs.gpssimulator.data.GPSData;
-import ch.fhnw.imvs.gpssimulator.data.GPSDataListener;
+import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.File;
+import java.util.prefs.BackingStoreException;
+import java.util.prefs.Preferences;
 
 public class MapPanel extends JPanel implements ActionListener {
 
@@ -73,18 +69,6 @@ public class MapPanel extends JPanel implements ActionListener {
         model.mapViewPosition.setCenter(pos);
         model.mapViewPosition.setZoomLevel((byte) SimulatorMain.prefs.getInt("zoom", 16));
 
-        GPSData.addChangeListener(new GPSDataListener() {
-
-            @Override
-            public void valueChanged() {
-                if (Locator.that != null) {
-                    LatLong pos = new LatLong(GPSData.getLatitude(), GPSData.getLongitude());
-                    model.mapViewPosition.setCenter(pos);
-                    Locator.setNewLocation(new Location(pos.getLatitude(), pos.getLongitude(), GPSData.getQuality(), true, (float) GPSData.getSpeed(), true, GPSData.getCourse(), GPSData.getAltitude(), Location.ProviderType.GPS));
-                }
-
-            }
-        });
     }
 
     private static void addLayers(MapView mapView, String MapPath) {
@@ -95,7 +79,7 @@ public class MapPanel extends JPanel implements ActionListener {
         layers.add(createTileRendererLayer(tileCache, mapView.getModel().mapViewPosition, layerManager, MapPath));
     }
 
-    private static Layer createTileRendererLayer(TileCache tileCache, MapViewPosition mapViewPosition, LayerManager layerManager, String MapPath) {
+    private static Layer createTileRendererLayer(TileCache tileCache, IMapViewPosition mapViewPosition, LayerManager layerManager, String MapPath) {
         java.io.File mapFile = new java.io.File(MapPath);
         TileRendererLayer tileRendererLayer = new TileRendererLayer(tileCache, new MapFile(mapFile), mapViewPosition, false, false, true, GRAPHIC_FACTORY);
         tileRendererLayer.setXmlRenderTheme(InternalRenderTheme.OSMARENDER);

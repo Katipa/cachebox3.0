@@ -1,11 +1,111 @@
-apply plugin: "java"
-apply plugin: 'org.junit.platform.gradle.plugin'
-sourceCompatibility = 1.6
-[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
-sourceSets.main.java.srcDirs = ["src/"]
-sourceSets.test.java.srcDirs = ["tests/"]
-eclipse.project {
-    name = appName + "-core"
-}
+apply plugin: 'java'
+
+
 dependencies {
+    implementation "org.slf4j:slf4j-api:$slf4jVersion"
+    implementation fileTree(dir: 'libs', include: ['json-20180813.jar'])
+    implementation fileTree(dir: 'libs', include: ['libPP-jar-0.9.0-SNAPSHOT.jar'])
+    implementation fileTree(dir: 'libs', include: ['sjxp-2.2.jar'])
+
+    // libgdx
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    implementation "com.kotcrab.vis:vis-ui:$visUiVersion"
+
+    //vtm
+    implementation "org.mapsforge:vtm:$vtmVersion"
+    implementation "org.mapsforge:vtm-gdx:$vtmVersion"
+    implementation "org.mapsforge:vtm-themes:$vtmVersion"
+
+    implementation "de.longri.slf4j-libgdx:slf4j-libgdx:$slf4jLibgdxVersion"
+    implementation "de.longri.gdx-sqlite:gdx-sqlite:$gdxSqliteVersion"
+
+    implementation "commons-codec:commons-codec:1.9"
+    
+    // implementation "org.json:json:20180813"
+    
+}
+
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+//sourceSets.test.java.srcDirs = ["tests/"]
+sourceSets.test.resources.srcDirs = ["testsResources/"]
+
+//sourceSets with including LibGdx Tests for run unit tests on device
+sourceSets.main.java.srcDirs = ["src/", "../tests/libgdx_test/src"]
+
+//sourceSets without LibGdx tests (aka release)
+//sourceSets.main.java.srcDirs = ["src/"]
+
+
+task saveBuildInfo {
+    doFirst {
+        // get the current commit hash in git
+        def git_version = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'log', '-1', '--format=%h'
+            standardOutput = git_version
+        }
+        git_version = git_version.toString().trim()
+
+        def git_revison = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-list', '--all', '--count'
+            standardOutput = git_revison
+        }
+        git_revison = git_revison.toString().trim()
+
+        // get the current git branch, if any
+        def git_branch = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'symbolic-ref', '--short', '-q', 'HEAD'
+            standardOutput = git_branch
+            // ignore error output as we might not be on a branch
+            ignoreExitValue = true
+        }
+
+        // get the current git branch, if any
+        def git_ver_tag = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'describe', '--tags', '--abbrev=0', '--match', 'V*'
+            standardOutput = git_ver_tag
+            // ignore error output as we might not be on a branch
+            ignoreExitValue = true
+        }
+
+        // if we are not on a branch, try to get a tag for the commit
+        def git_branch_or_tag
+        if (git_branch.size() > 0) {
+            git_branch_or_tag = git_branch.toString().trim()
+        } else {
+            def git_tag = new ByteArrayOutputStream()
+            exec {
+                commandLine 'git', 'describe', '--tags', '--exact-match'
+                standardOutput = git_tag
+                // ignore error output
+                errorOutput = new ByteArrayOutputStream()
+                ignoreExitValue = true
+            }
+
+            git_branch_or_tag = git_tag.toString().trim()
+        }
+
+        def build_time = new Date().toString()
+
+        // save the combined build info into assets/build.info file
+        def result_line = git_ver_tag.toString().trim() + "#" + git_revison + "#" + git_branch_or_tag + "#" + git_version + "#" +
+                build_time
+        def assetsDir = "$projectDir/../launcher/android/assets"
+        def buildInfoFile = new File(assetsDir, 'build.info').getAbsolutePath()
+        new File(buildInfoFile).write(result_line)
+    }
+}
+
+tasks.withType(JavaCompile) {
+    compileTask -> compileTask.dependsOn saveBuildInfo
 }

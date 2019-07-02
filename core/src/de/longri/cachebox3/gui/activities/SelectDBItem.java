@@ -15,9 +15,15 @@
  */
 package de.longri.cachebox3.gui.activities;
 
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Scaling;
 import com.kotcrab.vis.ui.widget.VisLabel;
-import de.longri.cachebox3.gui.views.listview.ListViewItem;
+import com.kotcrab.vis.ui.widget.VisTable;
+import de.longri.cachebox3.CB;
+import de.longri.cachebox3.gui.widgets.list_view.ListViewItem;
 
 import java.io.File;
 
@@ -27,9 +33,10 @@ import java.io.File;
 public class SelectDBItem extends ListViewItem {
 
     private final String fileName;
+    private final VisLabel lblName, lblInfo;
+    private final VisLabel lblInfoSize;
 
-    public SelectDBItem(int listIndex, File file, String fileInfo, SelectDB_Activity.SelectDbStyle style) {
-
+    public SelectDBItem(int listIndex, File file, SelectDB_Activity.SelectDbStyle style) {
         super(listIndex);
         Label.LabelStyle nameStyle = new Label.LabelStyle();
         nameStyle.font = style.nameFont;
@@ -39,12 +46,23 @@ public class SelectDBItem extends ListViewItem {
         infoStyle.font = style.infoFont;
         infoStyle.fontColor = style.infoColor;
 
+        Table infoTable = new VisTable();
+
         fileName = file.getName();
-        VisLabel lblName = new VisLabel(fileName, nameStyle);
-        VisLabel lblInfo = new VisLabel(fileInfo, infoStyle);
-        this.add(lblName).left().fillX();
-        this.row();
-        this.add(lblInfo).left().fillX();
+        lblName = new VisLabel(fileName, nameStyle);
+        lblInfo = new VisLabel("", infoStyle);
+        lblInfoSize = new VisLabel("", infoStyle);
+        lblInfoSize.setAlignment(Align.right);
+        infoTable.add(lblName).left().fillX();
+        infoTable.row();
+        infoTable.add(lblInfo).left().expandX().fillX();
+        infoTable.row();
+        infoTable.add(lblInfoSize).right().expandX().fillX();
+
+        Image iconImage = new Image(CB.getSkin().getMenuIcon.manageDB, Scaling.none);
+        this.add(iconImage).center().padRight(CB.scaledSizes.MARGIN_HALF);
+
+        this.add(infoTable).expandX().fillX();
     }
 
     public String getFileName() {
@@ -54,5 +72,14 @@ public class SelectDBItem extends ListViewItem {
     @Override
     public void dispose() {
 
+    }
+
+    public void updateFileInfo(String fileInfo) {
+        String[] split = fileInfo.split("#");
+        if (split != null && split.length == 2) {
+            lblInfo.setText(split[0]);
+            lblInfoSize.setText(split[1]);
+        }
+        CB.requestRendering();
     }
 }

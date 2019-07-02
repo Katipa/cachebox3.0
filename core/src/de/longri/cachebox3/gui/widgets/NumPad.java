@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016 -2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -24,14 +24,16 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Disposable;
 import com.kotcrab.vis.ui.widget.VisTextButton;
 import de.longri.cachebox3.CB;
-import de.longri.cachebox3.logging.Logger;
+import de.longri.cachebox3.gui.stages.StageManager;
+import de.longri.cachebox3.gui.widgets.catch_exception_widgets.Catch_Table;
 import de.longri.cachebox3.translation.Translation;
-import de.longri.cachebox3.logging.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by Longri on 26.08.2016.
  */
-public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposable {
+public class NumPad extends Catch_Table implements TextField.OnscreenKeyboard, Disposable {
     final static Logger log = LoggerFactory.getLogger(NumPad.class);
 
     @Override
@@ -40,7 +42,7 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
     }
 
     public enum OptionalButton {
-        OK, CANCEL, DOT
+        OK, CANCEL, DOT, DelBack, none
     }
 
     public interface IKeyEventListener {
@@ -62,8 +64,9 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
     private final IKeyEventListener keyEventListener;
 
 
-    private final boolean hasOk, hasCancel, hasDot;
-    private final VisTextButton btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btnOk, btnCancel, btnDel, btnBack, btnDot, btnLeft, btnRight;
+    private final boolean hasOk, hasCancel, hasDot, hasDelBack;
+    private final VisTextButton btn0, btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btnDel, btnBack, btnDot, btnLeft, btnRight;
+    private final CB_Button btnOk, btnCancel;
     private float targetWidth;
 
 
@@ -76,7 +79,7 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         this.targetWidth = Gdx.graphics.getWidth();
         this.keyEventListener = keyEventListener;
 
-        boolean ok = false, cancel = false, dot = false;
+        boolean ok = false, cancel = false, dot = false, delBack = false;
 
 
         for (OptionalButton option : options) {
@@ -91,12 +94,16 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
                 case DOT:
                     dot = true;
                     break;
+                case DelBack:
+                    delBack = true;
+                    break;
             }
         }
 
         hasOk = ok;
         hasCancel = cancel;
         hasDot = dot;
+        hasDelBack = delBack;
 
         btn0 = new VisTextButton("0");
         btn1 = new VisTextButton("1");
@@ -110,8 +117,8 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         btn9 = new VisTextButton("9");
         btnBack = new VisTextButton("Back");
         btnDel = new VisTextButton("Del");
-        btnOk = new VisTextButton(Translation.Get("ok"));
-        btnCancel = new VisTextButton(Translation.Get("cancel"));
+        btnOk = new CB_Button(Translation.get("ok"));
+        btnCancel = new CB_Button(Translation.get("cancel"));
         btnDot = new VisTextButton(".");
         btnLeft = new VisTextButton("<");
         btnRight = new VisTextButton(">");
@@ -134,18 +141,25 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         btnDot.addListener(clickListener);
         btnLeft.addListener(clickListener);
         btnRight.addListener(clickListener);
-
+        CB.stageManager.registerForBackKey(clickListener);
 
     }
 
     private ClickListener clickListener = new ClickListener() {
         public void clicked(InputEvent event, float x, float y) {
-            VisTextButton btn = (VisTextButton) event.getListenerActor();
-            String keyValue = String.valueOf(btn.getText());
-            keyValue = keyValue.replace("Del", "D");
-            keyValue = keyValue.replace("Back", "B");
-            keyValue = keyValue.replace(Translation.Get("ok"), "O");
-            keyValue = keyValue.replace(Translation.Get("cancel"), "C");
+            String keyValue;
+            if (event == StageManager.BACK_KEY_INPUT_EVENT) {
+                keyValue = "C";
+            } else {
+                VisTextButton btn = (VisTextButton) event.getListenerActor();
+                keyValue = String.valueOf(btn.getText());
+                keyValue = keyValue.replace("Del", "D");
+                keyValue = keyValue.replace("Back", "B");
+                keyValue = keyValue.replace(Translation.get("ok"), "O");
+                keyValue = keyValue.replace(Translation.get("cancel"), "C");
+
+            }
+
             NumPad.this.keyEventListener.KeyPressed(keyValue);
             log.debug("Button [" + keyValue + "] clicked");
         }
@@ -193,8 +207,10 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         this.add(new Actor()).pad(pad);
         this.add(btn0).pad(pad).width(buttonWidth);
         this.add(hasDot ? btnDot : new Actor()).pad(pad).width(buttonWidth);
-        this.add(btnDel).pad(pad).width(buttonWidth);
-        this.add(btnBack).pad(pad).width(buttonWidth);
+        if (hasDelBack) {
+            this.add(btnDel).pad(pad).width(buttonWidth);
+            this.add(btnBack).pad(pad).width(buttonWidth);
+        }
         this.row();
 
         //row 5
@@ -208,6 +224,7 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         layoutInvalid = false;
     }
 
+    @Override
     public void dispose() {
         btn0.removeListener(clickListener);
         btn1.removeListener(clickListener);
@@ -226,6 +243,7 @@ public class NumPad extends Table implements TextField.OnscreenKeyboard, Disposa
         btnDot.removeListener(clickListener);
         btnLeft.removeListener(clickListener);
         btnRight.removeListener(clickListener);
+        CB.stageManager.unRegisterForBackKey(clickListener);
         this.clear();
     }
 

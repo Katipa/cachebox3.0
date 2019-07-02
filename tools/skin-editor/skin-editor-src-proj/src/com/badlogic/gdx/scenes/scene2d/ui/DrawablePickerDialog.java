@@ -16,15 +16,16 @@
 package com.badlogic.gdx.scenes.scene2d.ui;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Preferences;
 import com.badlogic.gdx.files.FileHandle;
-import com.badlogic.gdx.graphics.g2d.NinePatch;
-import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
+import com.badlogic.gdx.scenes.scene2d.*;
 import com.badlogic.gdx.scenes.scene2d.Event;
-import com.badlogic.gdx.scenes.scene2d.Stage;
-import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.reflect.Field;
@@ -35,10 +36,13 @@ import com.mobidevelop.maps.editor.ui.utils.Tooltips;
 import de.longri.cachebox3.develop.tools.skin_editor.NinePatchEditorDialog;
 import de.longri.cachebox3.develop.tools.skin_editor.SkinEditorGame;
 import de.longri.cachebox3.develop.tools.skin_editor.SvgFileIconProvider;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import de.longri.cachebox3.gui.drawables.FrameAnimationDrawable;
+import de.longri.cachebox3.gui.drawables.SvgNinePatchDrawable;
+import de.longri.cachebox3.gui.skin.styles.FrameAnimationStyle;
 import de.longri.cachebox3.utils.SkinColor;
 import org.oscim.backend.canvas.Bitmap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.*;
 import java.util.*;
@@ -63,6 +67,7 @@ public class DrawablePickerDialog extends Dialog {
     private final boolean callSelectedSvg;
     static private FileChooser fileChooser = new FileChooser(FileChooser.Mode.OPEN);
     static private SvgFileIconProvider svgFileIconProvider;
+    private final int arrayIndex;
 
     TextButton togglShowNinePatch;
     TextButton togglShowDrawable;
@@ -90,13 +95,14 @@ public class DrawablePickerDialog extends Dialog {
         fileChooser.setIconProvider(svgFileIconProvider);
     }
 
-    public DrawablePickerDialog(final SkinEditorGame game, final Field field, boolean disableNinePatch, Stage stage) {
+    public DrawablePickerDialog(final SkinEditorGame game, final Field field, int arrayIndex, boolean disableNinePatch, Stage stage) {
         super("Drawable Picker", game.skin);
         this.game = game;
         this.field = field;
         this.disableNinePatch = disableNinePatch;
         this.stage = stage;
         this.callSelectedSvg = false;
+        this.arrayIndex = arrayIndex;
         initializeSelf();
     }
 
@@ -107,6 +113,7 @@ public class DrawablePickerDialog extends Dialog {
         this.disableNinePatch = true;
         this.stage = stage;
         this.callSelectedSvg = true;
+        this.arrayIndex = -1;
         initializeSelf();
     }
 
@@ -114,6 +121,82 @@ public class DrawablePickerDialog extends Dialog {
     public void selectedSvg(ScaledSvg scaledSvg) {
     }
 
+
+    private void importDrawable(final FileHandle selectedFile, final boolean copy) {
+        // ask for name of generated recource
+        String selectedFileName = selectedFile.name().substring(0, selectedFile.name().lastIndexOf("."));
+        final TextField nameTextField = new TextField(selectedFileName, game.skin);
+        Dialog dlg0 = new Dialog("Set resource name", game.skin) {
+
+            @Override
+            protected void result(Object object) {
+                if ((Boolean) object == false) {
+                    return;
+                }
+
+                final String finalResourceName = nameTextField.getText();
+                final TextField scaleValueTextField = new TextField(String.valueOf(1.0f), game.skin);
+                Dialog dlg = new Dialog("Set Scale Value", game.skin) {
+
+                    @Override
+                    protected void result(Object object) {
+                        if ((Boolean) object == false) {
+                            return;
+                        }
+
+                        float scalfactor = 0;
+                        String text = scaleValueTextField.getText();
+                        if (text.isEmpty() == false) {
+                            scalfactor = Float.valueOf(text);
+                        }
+                        String originalName = null;
+                        FileHandle orig = selectedFile;
+                        originalName = orig.name();
+                        if (copy) {
+                            // Copy the file
+                            FileHandle dest = new FileHandle("projects/" + game.screenMain.getcurrentProject() + "/svg/" + originalName);
+                            orig.copyTo(dest);
+                        }
+
+                        // write scaled svg section
+                        ScaledSvg scaledSvg = new ScaledSvg();
+                        scaledSvg.path = "svg/" + originalName;
+                        scaledSvg.scale = scalfactor;
+                        scaledSvg.setRegisterName(finalResourceName);
+                        game.skinProject.add(finalResourceName, scaledSvg);
+
+                        FileHandle projectFolder = new FileHandle("projects/" + game.screenMain.getcurrentProject());
+                        FileHandle projectFile = projectFolder.child("skin.json");
+                        game.skinProject.save(projectFile);
+
+                        game.screenMain.refreshResources();
+                        refresh();
+                        game.showMsgDlg("File successfully added to your project.", getStage());
+                    }
+                };
+
+                dlg.pad(20);
+                dlg.getContentTable().add("Float Value:");
+                dlg.getContentTable().add(scaleValueTextField).pad(20);
+                dlg.button("OK", true);
+                dlg.button("Cancel", false);
+                dlg.key(Input.Keys.ENTER, true);
+                dlg.key(Input.Keys.ESCAPE, false);
+                dlg.show(getStage());
+                getStage().setKeyboardFocus(scaleValueTextField);
+            }
+        };
+
+        dlg0.pad(20);
+        dlg0.getContentTable().add("Resource name:");
+        dlg0.getContentTable().add(nameTextField).pad(20);
+        dlg0.button("OK", true);
+        dlg0.button("Cancel", false);
+        dlg0.key(Input.Keys.ENTER, true);
+        dlg0.key(Input.Keys.ESCAPE, false);
+        dlg0.show(getStage());
+        getStage().setKeyboardFocus(nameTextField);
+    }
 
     private void initializeSelf() {
         this.clear();
@@ -197,79 +280,12 @@ public class DrawablePickerDialog extends Dialog {
                         }
 
                         prefs.putString("last_import_directory", selectedFile.parent().path());
+                        importDrawable(selectedFile, true);
 
-                        // ask for name of generated recource
-                        String selectedFileName = selectedFile.name().substring(0, selectedFile.name().lastIndexOf("."));
-                        final TextField nameTextField = new TextField(selectedFileName, game.skin);
-                        Dialog dlg0 = new Dialog("Set resource name", game.skin) {
 
-                            @Override
-                            protected void result(Object object) {
-                                if ((Boolean) object == false) {
-                                    return;
-                                }
-
-                                final String finalResourceName = nameTextField.getText();
-                                final TextField scaleValueTextField = new TextField(String.valueOf(1.0f), game.skin);
-                                Dialog dlg = new Dialog("Set Scale Value", game.skin) {
-
-                                    @Override
-                                    protected void result(Object object) {
-                                        if ((Boolean) object == false) {
-                                            return;
-                                        }
-
-                                        float scalfactor = 0;
-                                        String text = scaleValueTextField.getText();
-                                        if (text.isEmpty() == false) {
-                                            scalfactor = Float.valueOf(text);
-                                        }
-
-                                        // Copy the file
-                                        FileHandle orig = selectedFile;
-                                        String originalName = orig.name();
-                                        FileHandle dest = new FileHandle("projects/" + game.screenMain.getcurrentProject() + "/svg/" + originalName);
-                                        orig.copyTo(dest);
-
-                                        // write scaled svg section
-                                        ScaledSvg scaledSvg = new ScaledSvg();
-                                        scaledSvg.path = "svg/" + originalName;
-                                        scaledSvg.scale = scalfactor;
-                                        scaledSvg.setRegisterName(finalResourceName);
-                                        game.skinProject.add(finalResourceName, scaledSvg);
-
-                                        FileHandle projectFolder = new FileHandle("projects/" + game.screenMain.getcurrentProject());
-                                        FileHandle projectFile = projectFolder.child("skin.json");
-                                        game.skinProject.save(projectFile);
-
-                                        game.screenMain.refreshResources();
-                                        refresh();
-                                        game.showMsgDlg("File successfully added to your project.", getStage());
-                                    }
-                                };
-
-                                dlg.pad(20);
-                                dlg.getContentTable().add("Float Value:");
-                                dlg.getContentTable().add(scaleValueTextField).pad(20);
-                                dlg.button("OK", true);
-                                dlg.button("Cancel", false);
-                                dlg.key(com.badlogic.gdx.Input.Keys.ENTER, true);
-                                dlg.key(com.badlogic.gdx.Input.Keys.ESCAPE, false);
-                                dlg.show(getStage());
-                                getStage().setKeyboardFocus(scaleValueTextField);
-                            }
-                        };
-
-                        dlg0.pad(20);
-                        dlg0.getContentTable().add("Resource name:");
-                        dlg0.getContentTable().add(nameTextField).pad(20);
-                        dlg0.button("OK", true);
-                        dlg0.button("Cancel", false);
-                        dlg0.key(com.badlogic.gdx.Input.Keys.ENTER, true);
-                        dlg0.key(com.badlogic.gdx.Input.Keys.ESCAPE, false);
-                        dlg0.show(getStage());
-                        getStage().setKeyboardFocus(nameTextField);
                     }
+
+
                 });
 
                 fileChooser.setDirectory(prefs.getString("last_import_directory"));
@@ -325,8 +341,8 @@ public class DrawablePickerDialog extends Dialog {
             }
         };
 
-        togglShowNinePatch = new TextButton("Show NinePatch", game.skin, "toggle");
-        togglShowDrawable = new TextButton("Show Drawable", game.skin, "toggle");
+        togglShowNinePatch = new TextButton("show NinePatch", game.skin, "toggle");
+        togglShowDrawable = new TextButton("show Drawable", game.skin, "toggle");
         filterField = new TextField("", game.skin);
 
         togglShowNinePatch.addListener(refreshListener);
@@ -373,6 +389,7 @@ public class DrawablePickerDialog extends Dialog {
 
         ObjectMap<String, ScaledSvg> svgItems = game.skinProject.getAll(ScaledSvg.class);
         ObjectMap<String, SvgNinePatchDrawable> svg9PatchItems = game.skinProject.getAll(SvgNinePatchDrawable.class);
+        ObjectMap<String, FrameAnimationStyle> frameAnimationsItems = game.skinProject.getAll(FrameAnimationStyle.class);
 
 
 //        ObjectMap<String, Drawable> itemsDrawables = game.skinProject.getAll(Drawable.class);
@@ -382,6 +399,27 @@ public class DrawablePickerDialog extends Dialog {
 
         boolean showDrawables = togglShowDrawable.isChecked();
         boolean show9Patch = togglShowNinePatch.isChecked() && !disableNinePatch;
+
+        if (true) {
+            Iterator<String> it = frameAnimationsItems.keys().iterator();
+            while (it.hasNext()) {
+                String key = it.next();
+
+                // key filter
+                String filter = filterField.getText();
+                if (!filter.isEmpty()) {
+                    if (!key.toLowerCase().contains(filter.toLowerCase())) {
+                        continue;
+                    }
+                }
+
+                FrameAnimationStyle style = frameAnimationsItems.get(key);
+
+                FrameAnimationDrawable drw = new FrameAnimationDrawable(style);
+                items.put(key, new InternalItem(drw, drw));
+
+            }
+        }
 
 
         if (showDrawables) {
@@ -462,9 +500,21 @@ public class DrawablePickerDialog extends Dialog {
             }
 
             Button buttonItem = new Button(game.skin);
-
             Image img = null;
-            InternalItem item = items.get(key);
+            final InternalItem item = items.get(key);
+
+            buttonItem.addListener(new ClickListener(Input.Buttons.RIGHT) {
+                public void clicked(InputEvent event, float x, float y) {
+                    //show Copy dialog Box
+                    if (item.skinInfo instanceof ScaledSvg) {
+                        ScaledSvg svg = (ScaledSvg) item.skinInfo;
+                        FileHandle fileHandle = new FileHandle("projects/" + game.screenMain.getcurrentProject() + "/" + svg.path);
+                        importDrawable(fileHandle, false);
+                    }
+
+                }
+            });
+
 
             img = new Image((Drawable) item.drawable);
 
@@ -480,6 +530,7 @@ public class DrawablePickerDialog extends Dialog {
 
                 private Event lastHandeldEvent;
 
+                @Override
                 public boolean handle(Event event) {
                     if (!(event instanceof ChangeEvent)) return false;
 
@@ -577,9 +628,14 @@ public class DrawablePickerDialog extends Dialog {
                     try {
                         // Since we have reloaded everything we have to get
                         // field back
-                        game.screenMain.paneOptions.refreshSelection();
+//                        game.screenMain.paneOptions.refreshSelection();
 
-                        if (field.getType() == Bitmap.class) {
+                        if (field.getType() == Array.class) {
+                            Object value = field.get(game.screenMain.paneOptions.currentStyle);
+                            Array<TextureAtlas.AtlasRegion> array = (Array<TextureAtlas.AtlasRegion>) value;
+                            array.set(arrayIndex, (TextureAtlas.AtlasRegion) ((TextureRegionDrawable) items.get(key).drawable).getRegion());
+                            field.set(game.screenMain.paneOptions.currentStyle, array);
+                        } else if (field.getType() == Bitmap.class) {
                             Bitmap bmp = game.skinProject.get(key, Bitmap.class);
                             field.set(game.screenMain.paneOptions.currentStyle, bmp);
                         } else {
@@ -603,17 +659,18 @@ public class DrawablePickerDialog extends Dialog {
             boolean isNinePatch = itemObject.drawable instanceof SvgNinePatchDrawable;
 
 
-            String info;
+            String info = "";
             if (isNinePatch) {
                 SvgNinePatchDrawable.SvgNinePatchDrawableUnScaledValues values =
                         ((SvgNinePatchDrawable) itemObject.drawable).values;
-                info = String.format("l:%d, r:%d, t:%d, b:%d \nlw:%d, rw:%d, th:%d, bh:%d ",
-                        values.left, values.right, values.top, values.bottom,
-                        values.leftWidth, values.rightWidth, values.topHeight, values.bottomHeight);
+                info = String.format("l:%d, r:%d, t:%d, b:%d ",
+                        values.left, values.right, values.top, values.bottom);
             } else {
-                info = "scale: " + Float.toString(((ScaledSvg) itemObject.skinInfo).scale) +
-                        "\n  w: " + itemObject.drawable.getMinWidth() +
-                        " /  h: " + itemObject.drawable.getMinHeight();
+                if (itemObject.skinInfo instanceof ScaledSvg) {
+                    info = "scale: " + Float.toString(((ScaledSvg) itemObject.skinInfo).scale) +
+                            "\n  w: " + itemObject.drawable.getMinWidth() +
+                            " /  h: " + itemObject.drawable.getMinHeight();
+                }
             }
 
 

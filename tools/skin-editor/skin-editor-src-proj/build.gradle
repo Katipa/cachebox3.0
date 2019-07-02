@@ -1,35 +1,37 @@
-apply plugin: "java"
+apply plugin: 'java'
 
-sourceCompatibility = 1.6
-sourceSets.main.java.srcDirs = [ "src/" ]
+sourceCompatibility = "1.8"
+targetCompatibility = "1.8"
 
-sourceSets.main.output.resourcesDir "assets/"
+[compileJava]*.options*.encoding = 'UTF-8'
+sourceSets.main.java.srcDirs = ["src/"] 
 
-project.ext.mainClassName = "de.longri.cachebox3.develop.tools.skin_editor.SkinEditorDesktopLauncher"
-project.ext.assetsDir = new File("../assets");
+dependencies {
+    implementation project(":core")
+    implementation project(":desktop")
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
 
-task run(dependsOn: classes, type: JavaExec) {
-    main = project.mainClassName
-    classpath = sourceSets.main.runtimeClasspath
-    standardInput = System.in
-    workingDir = project.assetsDir
-    ignoreExitValue = true
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+    implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-tools:$gdxVersion"
+
+    implementation group: 'commons-cli', name: 'commons-cli', version: '1.4'
+    implementation 'com.kitfox.svg:svg-salamander:1.0'
+
+    implementation "com.kotcrab.vis:vis-ui:$visUiVersion"
+    implementation group: 'commons-codec', name: 'commons-codec', version: '1.9'
+    implementation group: 'org.json', name: 'json', version: '20180813'
+
+    //vtm
+    implementation "org.mapsforge:vtm-gdx:$vtmVersion"
+    implementation "org.mapsforge:vtm-desktop:$vtmVersion"
+    implementation "org.mapsforge:vtm-desktop:$vtmVersion:natives-linux"
+    implementation "org.mapsforge:vtm-desktop:$vtmVersion:natives-osx"
+    implementation "org.mapsforge:vtm-desktop:$vtmVersion:natives-windows"
+
+    implementation "de.longri.slf4j-libgdx:slf4j-libgdx:$slf4jLibgdxVersion"
 }
 
-task dist(type: Jar) {
-    from files(sourceSets.main.output.classesDir)
-    from files(sourceSets.main.output.resourcesDir)
-    from {configurations.compile.collect {zipTree(it)}}
-    from files(project.assetsDir);
- 
-    manifest {
-        attributes 'Main-Class': project.mainClassName
-    }
-}
-
-dist.dependsOn classes
-
-
-eclipse.project {
-    name = appName + "-skineditor"
-}

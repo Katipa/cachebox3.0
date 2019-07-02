@@ -18,27 +18,33 @@ package de.longri.cachebox3;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.NinePatch;
-import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
-import com.badlogic.gdx.scenes.scene2d.utils.NinePatchDrawable;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.scenes.scene2d.EventListener;
+import com.badlogic.gdx.scenes.scene2d.ui.Button;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.utils.Array;
 import de.longri.cachebox3.utils.converter.Base64;
-import org.apache.commons.codec.binary.Hex;
 import org.oscim.backend.canvas.Bitmap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 
 /**
  * Created by Longri on 18.07.16.
  */
 public class Utils {
     static final Logger log = LoggerFactory.getLogger(Utils.class);
+
+    public static final String THUMB = "thumb_";
+    public static final String THUMB_OVERVIEW = "overview";
 
     /**
      * Returns a @Pixmap from given Bitmap
@@ -48,30 +54,23 @@ public class Utils {
      */
     public static Pixmap getPixmapFromBitmap(Bitmap bitmap) {
         byte[] encodedData = bitmap.getPngEncodedData();
-        return new Pixmap(encodedData, 0, encodedData.length);
+        Pixmap ret = new Pixmap(encodedData, 0, encodedData.length);
+        encodedData = new byte[0];
+        System.gc();
+        return ret;
     }
 
-
-    public static Drawable get9PatchFromSvg(InputStream inputStream, int left, int right, int top, int bottom) {
+    public static TextureRegion getTextureRegion(InputStream inputStream) {
         try {
             Bitmap svgBitmap = PlatformConnector.getSvg("", inputStream, PlatformConnector.SvgScaleType.DPI_SCALED, 1f);
-
-            //scale nine patch regions
-            float scale = CB.getScaledFloat(1);
-            left *= scale;
-            right *= scale;
-            top *= scale;
-            bottom *= scale;
-
-            NinePatchDrawable ninePatchDrawable = new NinePatchDrawable(new NinePatch(new Texture(getPixmapFromBitmap(svgBitmap)), left, right, top, bottom));
-            return ninePatchDrawable;
-
+            TextureRegion ret = new TextureRegion(new Texture(getPixmapFromBitmap(svgBitmap)));
+            svgBitmap.recycle();
+            return ret;
         } catch (IOException e) {
-            log.error("get9PatchFromSvg", e);
+            log.error("getTextureRegion", e);
         }
         return null;
     }
-
 
     /**
      * List all Files inside a FileHandle (Directory)
@@ -101,7 +100,7 @@ public class Utils {
             e.printStackTrace();
         }
 
-        RC4(b, Key);
+        rc4(b, Key);
         String decrypted = "";
 
         char[] c = new char[b.length];
@@ -149,7 +148,7 @@ public class Utils {
         String encrypted = "";
         try {
             int[] b = byte2intArray(value.getBytes());
-            RC4(b, Key);
+            rc4(b, Key);
             encrypted = Base64.encodeBytes(int2byteArray(b));
         } catch (Exception e) {
             e.printStackTrace();
@@ -157,7 +156,7 @@ public class Utils {
         return encrypted;
     }
 
-    public static void RC4(int[] bytes, int[] key) {
+    public static void rc4(int[] bytes, int[] key) {
         int[] s = new int[256];
         int[] k = new int[256];
         int temp;
@@ -188,7 +187,7 @@ public class Utils {
         }
     }
 
-    public static String GetFileExtension(String filename) {
+    public static String getFileExtension(String filename) {
         int dotposition = filename.lastIndexOf(".");
         String ext = "";
         if (dotposition > -1) {
@@ -198,7 +197,7 @@ public class Utils {
         return ext;
     }
 
-    public static String GetFileNameWithoutExtension(String filename) {
+    public static String getFileNameWithoutExtension(String filename) {
         int dotposition = filename.lastIndexOf(".");
         if (dotposition >= 0)
             filename = filename.substring(0, dotposition);
@@ -209,7 +208,7 @@ public class Utils {
 
     }
 
-    public static String GetFileName(String filename) {
+    public static String getFileName(String filename) {
         int slashposition = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
         if (slashposition >= 0)
             filename = filename.substring(slashposition + 1, filename.length());
@@ -217,7 +216,7 @@ public class Utils {
 
     }
 
-    public static String GetDirectoryName(String filename) {
+    public static String getDirectoryName(String filename) {
         int slashposition = Math.max(filename.lastIndexOf("/"), filename.lastIndexOf("\\"));
         if (slashposition >= 0)
             filename = filename.substring(0, slashposition);
@@ -230,7 +229,7 @@ public class Utils {
      * @param filename
      * @return true, wenn das File existiert, ansonsten false.
      */
-    public static boolean FileExistsNotEmpty(String filename) {
+    public static boolean fileExistsNotEmpty(String filename) {
         File file = new File(filename);
         if (!file.exists())
             return false;
@@ -248,21 +247,29 @@ public class Utils {
      * @return
      */
     public static String getMd5(FileHandle fileHandle) {
-
         try {
-            final MessageDigest md = MessageDigest.getInstance("MD5");
-            final byte[] bytes = new byte[2048];
-            int numBytes;
-            InputStream inputStream = fileHandle.read();
-            while ((numBytes = inputStream.read(bytes)) != -1) {
-                md.update(bytes, 0, numBytes);
+            InputStream fin = fileHandle.read();
+            java.security.MessageDigest md5er =
+                    MessageDigest.getInstance("MD5");
+            byte[] buffer = new byte[1024];
+            int read;
+            do {
+                read = fin.read(buffer);
+                if (read > 0)
+                    md5er.update(buffer, 0, read);
+            } while (read != -1);
+            fin.close();
+            byte[] digest = md5er.digest();
+            if (digest == null)
+                return null;
+            String strDigest = "0x";
+            for (int i = 0; i < digest.length; i++) {
+                strDigest += Integer.toString((digest[i] & 0xff)
+                        + 0x100, 16).substring(1).toUpperCase();
             }
-            inputStream.close();
-            return new String(Hex.encodeHex(md.digest()));
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+            return strDigest;
+        } catch (Exception e) {
+            log.error("create md5 hash", e);
         }
         return "";
     }
@@ -365,8 +372,8 @@ public class Utils {
         return result;
     }
 
-    public static String GetFileName(FileHandle fileHandle) {
-        return GetFileName(fileHandle.name());
+    public static String getFileName(FileHandle fileHandle) {
+        return getFileName(fileHandle.name());
     }
 
 
@@ -377,15 +384,28 @@ public class Utils {
         log.info(("Time for " + name + ": " + Long.toString(runningTime)));
     }
 
-    // for use copy method
+    public static void triggerButtonClicked(Button button) {
 
-//    Utils.logRunningTime("Clustering", new Runnable() {
-//        @Override
-//        public void run() {
-//
-//
-//
-//        }
-//    });
+        log.debug("Perform click event on {}", button);
+
+        Array<EventListener> listeners = button.getListeners();
+        for (int i = 0; i < listeners.size; i++) {
+            if (listeners.get(i) instanceof ClickListener) {
+                ((ClickListener) listeners.get(i)).clicked(null, 0, 0);
+            }
+        }
+    }
+
+    /**
+     * Return TRUE if both Date are equals on Year, Day, Month, Hour, Minute and Second
+     *
+     * @param timestamp
+     * @param timestamp1
+     * @return
+     */
+    public static boolean equalsDate(Date timestamp, Date timestamp1) {
+        DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
+        return df.format(timestamp).equals(df.format(timestamp1));
+    }
 
 }

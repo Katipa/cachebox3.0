@@ -18,7 +18,11 @@ package de.longri.cachebox3.settings.types;
 public class SettingTime extends SettingBase<Integer> {
 
     public SettingTime(String name, SettingCategory category, SettingMode modus, int defaultValue, SettingStoreType StoreType, SettingUsage usage) {
-        super(name, category, modus, StoreType, usage);
+        this(name, category, modus, defaultValue, StoreType, usage, false);
+    }
+
+    public SettingTime(String name, SettingCategory category, SettingMode modus, int defaultValue, SettingStoreType StoreType, SettingUsage usage, boolean desired) {
+        super(name, category, modus, StoreType, usage, desired);
         this.defaultValue = defaultValue;
         this.value = defaultValue;
     }
@@ -46,14 +50,14 @@ public class SettingTime extends SettingBase<Integer> {
     }
 
     @Override
-    public String toDBString() {
+    public Object toDbValue() {
         return String.valueOf(value);
     }
 
     @Override
-    public boolean fromDBString(String dbString) {
+    public boolean fromDbvalue(Object dbString) {
         try {
-            value = Integer.valueOf(dbString);
+            value = Integer.valueOf((String) dbString);
             return true;
         } catch (Exception ex) {
             value = defaultValue;

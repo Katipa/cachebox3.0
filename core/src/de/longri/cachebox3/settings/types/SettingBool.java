@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2011-2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
@@ -18,20 +18,24 @@ package de.longri.cachebox3.settings.types;
 public class SettingBool extends SettingBase<Boolean> {
 
     public SettingBool(String name, SettingCategory category, SettingMode modus, boolean defaultValue, SettingStoreType StoreType, SettingUsage usage) {
-        super(name, category, modus, StoreType, usage);
+        this(name, category, modus, defaultValue, StoreType, usage, false);
+    }
+
+    public SettingBool(String name, SettingCategory category, SettingMode modus, boolean defaultValue, SettingStoreType StoreType, SettingUsage usage, boolean desired) {
+        super(name, category, modus, StoreType, usage, desired);
         this.defaultValue = defaultValue;
         this.value = defaultValue;
     }
 
     @Override
-    public String toDBString() {
+    public Object toDbValue() {
         return String.valueOf(value);
     }
 
     @Override
-    public boolean fromDBString(String dbString) {
+    public boolean fromDbvalue(Object dbString) {
         try {
-            value = Boolean.valueOf(dbString);
+            value = dbString.equals("1") ? true : Boolean.valueOf((String) dbString);
             return true;
         } catch (Exception ex) {
             value = defaultValue;

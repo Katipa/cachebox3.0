@@ -18,38 +18,53 @@ package com.badlogic.gdx.scenes.scene2d.ui;
 import com.badlogic.gdx.utils.Array;
 import de.longri.cachebox3.locator.Coordinate;
 import de.longri.cachebox3.locator.geocluster.GeoBoundingBoxInt;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import org.oscim.core.GeoPoint;
 import org.oscim.renderer.atlas.TextureRegion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 
 public class MapWayPointItem extends Coordinate {
     private final static Logger log = LoggerFactory.getLogger(MapWayPointItem.class);
 
-    private final Object dataObject; // Cache.class or WayPoint.class
+    public final Object dataObject; // Cache.class or WayPoint.class
 
     final GeoPoint geoPoint;
     private GeoBoundingBoxInt bounds;
     private final int cachedHash;
     private final TextureRegion[] small, middle, large;
+    public final boolean selected;
+    public boolean visible;
 
 
-    public MapWayPointItem(Coordinate pos, Object obj, Regions regions) {
-        super(pos.latitude, pos.longitude);
-        geoPoint = new GeoPoint(pos.latitude, pos.longitude);
+    public MapWayPointItem(Coordinate pos, Object obj, Regions regions, boolean selected) {
+        super(pos.getLatitude(), pos.getLongitude());
+        geoPoint = new GeoPoint(pos.getLatitude(), pos.getLongitude());
         this.dataObject = obj;
         cachedHash = hashCode();
+        this.selected = selected;
 
-        // extract regions
+        // extract regions if regions not NULL
+        if (regions == null) {
+            small = null;
+            middle = null;
+            large = null;
+            return;
+        }
         Array<TextureRegion> smallList = new Array<TextureRegion>(new TextureRegion[0]);
         Array<TextureRegion> middleList = new Array<TextureRegion>(new TextureRegion[0]);
         Array<TextureRegion> largeList = new Array<TextureRegion>(new TextureRegion[0]);
 
-        smallList.add(regions.normal.small);
-        middleList.add(regions.normal.middle);
-        largeList.add(regions.normal.large);
+
+        boolean isSelected = false;
+
+        if (regions.selectedOverlay != null) {
+            isSelected = true;
+            if (regions.selectedOverlay.small != null) smallList.add(regions.selectedOverlay.small);
+            if (regions.selectedOverlay.middle != null) middleList.add(regions.selectedOverlay.middle);
+            if (regions.selectedOverlay.large != null) largeList.add(regions.selectedOverlay.large);
+        }
 
         if (regions.disabledOverlay != null) {
             if (regions.disabledOverlay.small != null) smallList.add(regions.disabledOverlay.small);
@@ -57,16 +72,26 @@ public class MapWayPointItem extends Coordinate {
             if (regions.disabledOverlay.large != null) largeList.add(regions.disabledOverlay.large);
         }
 
-        if (regions.selectedOverlay != null) {
-            if (regions.selectedOverlay.small != null) smallList.add(regions.selectedOverlay.small);
-            if (regions.selectedOverlay.middle != null) middleList.add(regions.selectedOverlay.middle);
-            if (regions.selectedOverlay.large != null) largeList.add(regions.selectedOverlay.large);
+        smallList.add(regions.normal.small);
+        middleList.add(regions.normal.middle);
+        largeList.add(regions.normal.large);
+
+
+        while (smallList.removeValue(null, true)) ;
+        while (middleList.removeValue(null, true)) ;
+        while (largeList.removeValue(null, true)) ;
+
+
+        if (isSelected) {
+            // set to large icons
+            small = largeList.shrink();
+            middle = largeList.shrink();
+            large = largeList.shrink();
+        } else {
+            small = smallList.shrink();
+            middle = middleList.shrink();
+            large = largeList.shrink();
         }
-
-
-        small = smallList.shrink();
-        middle = middleList.shrink();
-        large = largeList.shrink();
 
     }
 

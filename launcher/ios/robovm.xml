@@ -19,8 +19,9 @@
         </resource>
     </resources>
     <forceLinkClasses>
-        <pattern>com.badlogic.gdx.sqlite.robovm.RobovmDatabaseManager</pattern>
-        <pattern>SQLite.**</pattern>
+        <pattern>de.longri.libPP.PixmapPacker</pattern>
+        <pattern>de.longri.**</pattern>
+        <pattern>com.kotcrab.vis.**</pattern>
         <pattern>com.badlogic.gdx.scenes.scene2d.ui.*</pattern>
         <pattern>com.badlogic.gdx.graphics.g3d.particles.**</pattern>
         <pattern>com.android.okhttp.HttpHandler</pattern>
@@ -34,10 +35,15 @@
         <pattern>com.android.org.bouncycastle.crypto.digests.AndroidDigestFactoryOpenSSL</pattern>
         <pattern>org.apache.harmony.security.provider.cert.DRLCertFactory</pattern>
         <pattern>org.apache.harmony.security.provider.crypto.CryptoProvider</pattern>
+        <pattern>java.util.logging.ConsoleHandler</pattern>
+        <pattern>java.util.logging.SimpleFormatter</pattern>
     </forceLinkClasses>
     <libs>
         <lib>z</lib>
         <lib>build/native/libvtm-jni.a</lib>  <!--vtm native -->
+        <lib>libs/libLibPP.a</lib>  <!--libPP native -->
+        <lib>build/native/META-INF/robovm/ios/libs/libGdxSqlite.a</lib>  <!--GdxSqlite native -->
+        <lib>build/native/META-INF/robovm/ios/libs/libsqlitecustom.a</lib>  <!--GdxSqlite native -->
     </libs>
     <frameworkPaths>
         <path>build/native</path>  <!--SVGgh framework path -->
@@ -52,5 +58,6 @@
         <framework>AudioToolbox</framework>
         <framework>AVFoundation</framework>
         <framework>CoreLocation</framework>
+        <framework>WebKit</framework>
     </frameworks>
 </config>

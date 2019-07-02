@@ -15,20 +15,23 @@
  */
 package de.longri.cachebox3.gui.actions;
 
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by Longri on 24.07.16.
  */
 public abstract class AbstractAction {
 
-    final static Logger log = LoggerFactory.getLogger(AbstractAction.class);
+    protected final static boolean NOT_IMPLEMENTED = true;
+    protected final static boolean IMPLEMENTED = false;
 
-    protected String name;
-    protected int id;
+    protected final static Logger log = LoggerFactory.getLogger(AbstractAction.class);
+
+    protected final boolean functionDisabled;
+    protected final String name;
+    protected final int id;
     protected String nameExtention = "";
 
     /**
@@ -38,16 +41,24 @@ public abstract class AbstractAction {
      * @param id   = AbstractAction ID ( AID_xxxx )
      */
     public AbstractAction(String name, int id) {
+        this.name = name;
+        this.id = id;
+        this.functionDisabled = IMPLEMENTED;
+    }
+
+    public AbstractAction(boolean disabled, String name, int id) {
         //super();
         this.name = name;
         this.id = id;
+        this.functionDisabled = disabled;
     }
 
-    public AbstractAction(String name, String nameExtention, int id) {
+    public AbstractAction(boolean disabled, String name, String nameExtention, int id) {
         //super();
         this.name = name;
         this.id = id;
         this.nameExtention = nameExtention;
+        this.functionDisabled = disabled;
     }
 
 
@@ -70,8 +81,8 @@ public abstract class AbstractAction {
      *
      * @return
      */
-    public boolean getEnabled() {
-        return true;
+    public final boolean getEnabled() {
+        return !functionDisabled;
     }
 
     public abstract Drawable getIcon();

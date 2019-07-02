@@ -17,29 +17,29 @@ package de.longri.cachebox3.gui.help;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
-import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
-import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Align;
 import com.kotcrab.vis.ui.VisUI;
+import com.kotcrab.vis.ui.widget.VisTextButton;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.gui.animations.actor_animations.Blink;
 import de.longri.cachebox3.gui.animations.actor_animations.GestureHelpAnimation;
+import de.longri.cachebox3.gui.drawables.ColorDrawable;
 import de.longri.cachebox3.gui.stages.ViewManager;
 import de.longri.cachebox3.gui.widgets.ActionButton;
-import de.longri.cachebox3.gui.widgets.ColorDrawable;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import de.longri.cachebox3.gui.widgets.CB_Button;
 import de.longri.cachebox3.settings.Config;
 import de.longri.cachebox3.translation.Translation;
 import de.longri.cachebox3.utils.CB_RectF;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Created by Longri on 18.08.2016.
@@ -50,8 +50,8 @@ public class GestureHelp extends HelpWindow {
     final Drawable buttonDrawable;
     final Drawable gestureRightIcon, gestureUpIcon, gestureLeftIcon, gestureDownIcon;
     final GestureHelpStyle style;
-    final String GESTURE_MSG = Translation.Get("gestureHelp"); // "You can also use this gesture to call this function"
-    final String DONT_SHOW_AGAIN_MSG = Translation.Get("DontShowHelp"); // "Don't show help Msg again!"
+    final CharSequence GESTURE_MSG = Translation.get("gestureHelp");
+    final CharSequence DONT_SHOW_AGAIN_MSG = Translation.get("DontShowHelp");
     final Table table = new Table();
     private boolean isShowing = false;
 
@@ -171,12 +171,12 @@ public class GestureHelp extends HelpWindow {
         this.addActor(label);
 
 
-        TextButton.TextButtonStyle buttonStyle = new TextButton.TextButtonStyle();
+        VisTextButton.VisTextButtonStyle buttonStyle = new VisTextButton.VisTextButtonStyle();
         buttonStyle.font = this.style.font;
         buttonStyle.fontColor = this.style.fontColor;
         buttonStyle.up = new ColorDrawable(this.style.backgroundColor);
 
-        TextButton button = new TextButton(DONT_SHOW_AGAIN_MSG, buttonStyle);
+        CB_Button button = new CB_Button(DONT_SHOW_AGAIN_MSG, buttonStyle);
         button.setPosition(CB.scaledSizes.MARGIN, this.ellipseRectangle.getMaxY() + CB.scaledSizes.MARGINx2);
         button.addListener(new ClickListener() {
             public void clicked(InputEvent event, float x, float y) {

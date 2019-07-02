@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2017 team-cachebox.de
+ * Copyright (C) 2014-2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,15 @@
  */
 package de.longri.cachebox3.settings;
 
-import de.longri.cachebox3.CB;
+import com.badlogic.gdx.Application;
+import com.badlogic.gdx.Gdx;
 import de.longri.cachebox3.settings.types.*;
+
+import static de.longri.cachebox3.settings.types.SettingCategory.*;
+import static de.longri.cachebox3.settings.types.SettingStoreType.Global;
+import static de.longri.cachebox3.settings.types.SettingStoreType.Local;
+import static de.longri.cachebox3.settings.types.SettingUsage.ACB;
+import static de.longri.cachebox3.settings.types.SettingUsage.ALL;
 
 /**
  * Holds all map relevant settings
@@ -25,51 +32,60 @@ import de.longri.cachebox3.settings.types.*;
  */
 public class Settings_Map extends Settings_Const {
 
-    public static final SettingBool ShowAllWaypoints = (SettingBool) SettingsList.addSetting(new SettingBool("ShowAllWaypoints", SettingCategory.Map, NORMAL, true, SettingStoreType.Global, SettingUsage.ACB));
+    // NORMAL visible
+    public static final SettingFolder MapPackFolder = (SettingFolder) settingsList.addSetting(new SettingFolder("MapPackFolder", Map, NORMAL,
+            Gdx.app.getType() == Application.ApplicationType.iOS ? Gdx.files.getExternalStoragePath() : "?/repository/maps",
+            Global, ALL, false));
 
-    public static final SettingBool MapShowRating = (SettingBool) SettingsList.addSetting(new SettingBool("MapShowRating", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingBool MapShowDT = (SettingBool) SettingsList.addSetting(new SettingBool("MapShowDT", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingBool MapShowTitles = (SettingBool) SettingsList.addSetting(new SettingBool("MapShowTitles", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
 
-    public static final SettingBool MapShowCompass = (SettingBool) SettingsList.addSetting(new SettingBool("MapShowCompass", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
+    public static final SettingInt dynamicZoomLevelMax = (SettingInt) settingsList.addSetting(new SettingInt("dynamicZoomLevelMax", CarMode, NORMAL, 15, Global, ACB));
+    public static final SettingInt dynamicZoomLevelMin = (SettingInt) settingsList.addSetting(new SettingInt("dynamicZoomLevelMin", CarMode, NORMAL, 14, Global, ACB));
+    public static final SettingBool dynamicZoom = (SettingBool) settingsList.addSetting(new SettingBool("dynamicZoom", CarMode, NORMAL, true, Global, ACB));
+    public static final SettingInt MoveMapCenterMaxSpeed = (SettingInt) settingsList.addSetting(new SettingInt("MoveMapCenterMaxSpeed", CarMode, NORMAL, 40, Global, ACB));
 
-    public static final SettingBool CompassNorthOriented = (SettingBool) SettingsList.addSetting(new SettingBool("CompassNorthOriented", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingBool MapNorthOriented = (SettingBool) SettingsList.addSetting(new SettingBool("MapNorthOriented", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
+    // EXPERT visible
+    public static final SettingFloat MapViewDPIFaktor = (SettingFloat) settingsList.addSetting(new SettingFloat("MapViewDPIFaktor", Map, EXPERT, 1f, Global, ACB));
+    public static final SettingFloat MapViewTextFaktor = (SettingFloat) settingsList.addSetting(new SettingFloat("MapViewTextFaktor", Map, EXPERT, 1f, Global, ACB));
 
-    public static final SettingBool ShowDirektLine = (SettingBool) SettingsList.addSetting(new SettingBool("ShowDirektLine", SettingCategory.Map, NEVER, false, SettingStoreType.Global, SettingUsage.ACB));
+    // NEVER visible
+    public static final SettingBool ShowAllWaypoints = (SettingBool) settingsList.addSetting(new SettingBool("ShowAllWaypoints", Map, NEVER, true, Global, ACB));
+    public static final SettingBool MapShowRating = (SettingBool) settingsList.addSetting(new SettingBool("MapShowRating", Map, NEVER, true, Global, ACB));
+    public static final SettingBool MapShowDT = (SettingBool) settingsList.addSetting(new SettingBool("MapShowDT", Map, NEVER, true, Global, ACB));
+    public static final SettingBool MapShowTitles = (SettingBool) settingsList.addSetting(new SettingBool("MapShowTitles", Map, NEVER, true, Global, ACB));
+    public static final SettingBool MapShowCompass = (SettingBool) settingsList.addSetting(new SettingBool("MapShowCompass", Map, NEVER, true, Global, ACB));
+    public static final SettingBool ShowDirektLine = (SettingBool) settingsList.addSetting(new SettingBool("ShowDirektLine", Map, NEVER, false, Global, ACB));
+    public static final SettingBool MapHideMyFinds = (SettingBool) settingsList.addSetting(new SettingBool("MapHideMyFinds", Map, NEVER, false, Global, ACB));
+    public static final SettingFolder MapPackFolderLocal = (SettingFolder) settingsList.addSetting(new SettingFolder("MapPackFolderLocal", Map, NEVER, "?/repository/maps", Local, ALL, false));
+    public static final SettingStringList CurrentMapLayer = (SettingStringList) settingsList.addSetting(new SettingStringList("CurrentMapLayer", Map, NEVER, new String[]{"Mapnik"}, Global, ACB));
+    public static final SettingBool ShowAccuracyCircle = (SettingBool) settingsList.addSetting(new SettingBool("ShowAccuracyCircle", Map, NEVER, true, Global, ACB));
+    public static final SettingBool ShowMapCenterCross = (SettingBool) settingsList.addSetting(new SettingBool("ShowMapCenterCross", Map, NEVER, true, Global, ACB));
+    public static final SettingFolder TileCacheFolder = (SettingFolder) settingsList.addSetting(new SettingFolder("TileCacheFolder", Folder, NEVER, "?/repository/cache", Global, ALL, true));
+    public static final SettingFolder TileCacheFolderLocal = (SettingFolder) settingsList.addSetting(new SettingFolder("TileCacheFolderLocal", Folder, NEVER, "", Local, ALL, true));
 
-    public static final SettingBool MapHideMyFinds = (SettingBool) SettingsList.addSetting(new SettingBool("MapHideMyFinds", SettingCategory.Map, NEVER, false, SettingStoreType.Global, SettingUsage.ACB));
+    public static final SettingFile MapsforgeDayTheme = (SettingFile) settingsList.addSetting(new SettingFile("MapsforgeDayTheme", Map, NEVER, "", Global, ACB, "xml"));
+    public static final SettingFile MapsforgeNightTheme = (SettingFile) settingsList.addSetting(new SettingFile("MapsforgeNightTheme", Map, NEVER, "", Global, ACB, "xml"));
+    public static final SettingFile MapsforgeCarDayTheme = (SettingFile) settingsList.addSetting(new SettingFile("MapsforgeCarDayTheme", Map, NEVER, "", Global, ACB, "xml"));
+    public static final SettingFile MapsforgeCarNightTheme = (SettingFile) settingsList.addSetting(new SettingFile("MapsforgeCarNightTheme", Map, NEVER, "", Global, ACB, "xml"));
+    public static final SettingString MapsforgeDayStyle = (SettingString) settingsList.addSetting(new SettingString("MapsforgeDayStyle", Map, NEVER, "", Global, ACB));
+    public static final SettingString MapsforgeNightStyle = (SettingString) settingsList.addSetting(new SettingString("MapsforgeNightStyle", Map, NEVER, "", Global, ACB));
+    public static final SettingString MapsforgeCarDayStyle = (SettingString) settingsList.addSetting(new SettingString("MapsforgeCarDayStyle", Map, NEVER, "", Global, ACB));
+    public static final SettingString MapsforgeCarNightStyle = (SettingString) settingsList.addSetting(new SettingString("MapsforgeCarNightStyle", Map, NEVER, "", Global, ACB));
 
-    public static final SettingInt LastMapToggleBtnState = (SettingInt) SettingsList.addSetting(new SettingInt("LastMapToggleBtnState", SettingCategory.Map, NEVER, 0, SettingStoreType.Global, SettingUsage.ACB));
+    public static final SettingsBlob lastMapState = (SettingsBlob) settingsList.addSetting(new SettingsBlob("lastMapState", Map, NEVER, Local, ACB, false, new byte[]{}));
+    public static final SettingsBlob lastMapStateBeforeCar = (SettingsBlob) settingsList.addSetting(new SettingsBlob("lastMapStateBeforeCar", Map, NEVER, Local, ACB, false, new byte[]{}));
 
-    public static final SettingIntArray ZoomCross = (SettingIntArray) SettingsList.addSetting(new SettingIntArray("ZoomCross", SettingCategory.Map, NORMAL, 16, SettingStoreType.Global, SettingUsage.ACB, CrossLevel));
-
-    public static final SettingFloat MapViewDPIFaktor = (SettingFloat) SettingsList.addSetting(new SettingFloat("MapViewDPIFaktor", SettingCategory.Map, EXPERT, 1f, SettingStoreType.Global, SettingUsage.ACB));
-
-    public static final SettingFolder MapPackFolder = (SettingFolder) SettingsList.addSetting(new SettingFolder("MapPackFolder", SettingCategory.Map, EXPERT, CB.WorkPath + "/repository/maps", SettingStoreType.Global, SettingUsage.ALL, false));
-
-    public static final SettingFolder MapPackFolderLocal = (SettingFolder) SettingsList.addSetting(new SettingFolder("MapPackFolderLocal", SettingCategory.Map, NEVER, CB.WorkPath + "/repository/maps", SettingStoreType.Local, SettingUsage.ALL, false));
-
-    public static final SettingStringList CurrentMapLayer = (SettingStringList) SettingsList.addSetting(new SettingStringList("CurrentMapLayer", SettingCategory.Map, DEVELOPER, new String[]{"Mapnik"}, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingString CurrentMapOverlayLayer = (SettingString) SettingsList.addSetting(new SettingString("CurrentMapOverlayLayer", SettingCategory.Map, NEVER, "", SettingStoreType.Global, SettingUsage.ACB));
-
-    public static final SettingInt lastZoomLevel = (SettingInt) SettingsList.addSetting(new SettingInt("lastZoomLevel", SettingCategory.Map, DEVELOPER, 14, SettingStoreType.Global, SettingUsage.ALL));
-
-    public static final SettingBool ShowAccuracyCircle = (SettingBool) SettingsList.addSetting(new SettingBool("ShowAccuracyCircle", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingBool ShowMapCenterCross = (SettingBool) SettingsList.addSetting(new SettingBool("ShowMapCenterCross", SettingCategory.Map, NEVER, true, SettingStoreType.Global, SettingUsage.ACB));
-
-    public static final SettingBool PositionMarkerTransparent = (SettingBool) SettingsList.addSetting(new SettingBool("PositionMarkerTransparent", SettingCategory.Map, EXPERT, true, SettingStoreType.Global, SettingUsage.ACB));
-
-    public static final SettingIntArray OsmMinLevel = (SettingIntArray) SettingsList.addSetting(new SettingIntArray("OsmMinLevel", SettingCategory.Map, EXPERT, 7, SettingStoreType.Global, SettingUsage.ACB, Level));
-    public static final SettingIntArray OsmMaxLevel = (SettingIntArray) SettingsList.addSetting(new SettingIntArray("OsmMaxLevel", SettingCategory.Map, EXPERT, 19, SettingStoreType.Global, SettingUsage.ACB, Level));
-    public static final SettingIntArray CompassMapMinZoomLevel = (SettingIntArray) SettingsList.addSetting(new SettingIntArray("CompassMapMinZoomLevel", SettingCategory.Map, EXPERT, 13, SettingStoreType.Global, SettingUsage.ACB, Level));
-    public static final SettingIntArray CompassMapMaxZommLevel = (SettingIntArray) SettingsList.addSetting(new SettingIntArray("CompassMapMaxZommLevel", SettingCategory.Map, EXPERT, 20, SettingStoreType.Global, SettingUsage.ACB, Level));
-
-    public static final SettingFolder RenderThemesFolder = (SettingFolder) SettingsList.addSetting(new SettingFolder("RenderThemesFolder", SettingCategory.Map, NORMAL, "", SettingStoreType.Global, SettingUsage.ALL, false));
-    public static final SettingFile MapsforgeDayTheme = (SettingFile) SettingsList.addSetting(new SettingFile("MapsforgeDayTheme", SettingCategory.Map, NEVER, "", SettingStoreType.Global, SettingUsage.ACB, "xml"));
-    public static final SettingFile MapsforgeNightTheme = (SettingFile) SettingsList.addSetting(new SettingFile("MapsforgeNightTheme", SettingCategory.Map, NEVER, "", SettingStoreType.Global, SettingUsage.ACB, "xml"));
-    public static final SettingFile MapsforgeCarDayTheme = (SettingFile) SettingsList.addSetting(new SettingFile("MapsforgeCarDayTheme", SettingCategory.Map, NEVER, "", SettingStoreType.Global, SettingUsage.ACB, "xml"));
-    public static final SettingFile MapsforgeCarNightTheme = (SettingFile) SettingsList.addSetting(new SettingFile("MapsforgeCarNightTheme", SettingCategory.Map, NEVER, "", SettingStoreType.Global, SettingUsage.ACB, "xml"));
+//    public static final SettingIntArray ZoomCross = (SettingIntArray) settingsList.addSetting(new SettingIntArray("ZoomCross", Map, NORMAL, 16, Global, ACB, CrossLevel));
+//    public static final SettingString CurrentMapOverlayLayer = (SettingString) settingsList.addSetting(new SettingString("CurrentMapOverlayLayer", Map, NEVER, "", Global, ACB));
+//    public static final SettingBool PositionMarkerTransparent = (SettingBool) settingsList.addSetting(new SettingBool("PositionMarkerTransparent", Map, EXPERT, true, Global, ACB));
+//
+//    public static final SettingIntArray OsmMinLevel = (SettingIntArray) settingsList.addSetting(new SettingIntArray("OsmMinLevel", Map, EXPERT, 7, Global, ACB, Level));
+//    public static final SettingIntArray OsmMaxLevel = (SettingIntArray) settingsList.addSetting(new SettingIntArray("OsmMaxLevel", Map, EXPERT, 19, Global, ACB, Level));
+//    public static final SettingIntArray CompassMapMinZoomLevel = (SettingIntArray) settingsList.addSetting(new SettingIntArray("CompassMapMinZoomLevel", Map, EXPERT, 13, Global, ACB, Level));
+//    public static final SettingIntArray CompassMapMaxZommLevel = (SettingIntArray) settingsList.addSetting(new SettingIntArray("CompassMapMaxZommLevel", Map, EXPERT, 20, Global, ACB, Level));
+//
+//    public static final SettingFolder RenderThemesFolder = (SettingFolder) settingsList.addSetting(new SettingFolder("RenderThemesFolder", Map, NORMAL, "", Global, ALL, false));
+//    public static final SettingBool MoveMapCenterWithSpeed = (SettingBool) settingsList.addSetting(new SettingBool("MoveMapCenterWithSpeed", CarMode, NORMAL, false, Global, ACB));
+//    public static final SettingBool DEBUG_MapGrid = (SettingBool) settingsList.addSetting(new SettingBool("DEBUG_MapGrid", Debug, NORMAL, false, Global, ACB));
 
 
 }

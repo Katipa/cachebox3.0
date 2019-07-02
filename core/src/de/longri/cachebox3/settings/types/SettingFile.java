@@ -1,5 +1,5 @@
-/* 
- * Copyright (C) 2011-2017 team-cachebox.de
+/*
+ * Copyright (C) 2011-2018 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 package de.longri.cachebox3.settings.types;
 
+import de.longri.cachebox3.CB;
+
 public class SettingFile extends SettingLongString {
     private String ext = "*";
 
@@ -26,6 +28,32 @@ public class SettingFile extends SettingLongString {
         super(name, category, modus, defaultValue, StoreType, usage);
         this.ext = ext;
     }
+
+    @Override
+    public void setValue(String value) {
+        super.setValue(value.replace(CB.WorkPath, "?"));
+    }
+
+    @Override
+    public String getValue() {
+        return replacePathSeparator(value);
+    }
+
+    @Override
+    public String getDefaultValue() {
+        return replacePathSeparator(defaultValue);
+    }
+
+
+    private String replacePathSeparator(String rep) {
+        if (rep.startsWith("?")) {
+            rep = CB.WorkPath + rep.substring(1);
+        }
+        rep = rep.replace("\\", System.getProperty("file.separator"));
+        rep = rep.replace("/", System.getProperty("file.separator"));
+        return rep;
+    }
+
 
     public String getExt() {
         return ext;

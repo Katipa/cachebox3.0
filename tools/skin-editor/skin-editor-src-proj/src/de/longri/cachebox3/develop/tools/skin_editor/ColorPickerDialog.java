@@ -15,22 +15,27 @@
  ******************************************************************************/
 package de.longri.cachebox3.develop.tools.skin_editor;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.Dialog;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.ObjectMap;
 import com.badlogic.gdx.utils.reflect.Field;
+import com.kotcrab.vis.ui.widget.color.ColorPicker;
+import com.kotcrab.vis.ui.widget.color.ColorPickerAdapter;
+import com.kotcrab.vis.ui.widget.color.ColorPickerListener;
 import de.longri.cachebox3.utils.SkinColor;
 
-import javax.swing.*;
-import java.awt.*;
+
 import java.util.Iterator;
 
 /**
@@ -45,6 +50,54 @@ public class ColorPickerDialog extends Dialog {
     private Table tableColors;
     ObjectMap<String, SkinColor> colors;
     private Field field;
+
+    ColorPickerAdapter newColorPickerAdapter = new ColorPickerAdapter() {
+        @Override
+        public void finished(final Color color) {
+            if (color != null) {
+                final TextField nameTextField = new TextField("???", game.skin);
+                Dialog dlg0 = new Dialog("name your color", game.skin) {
+
+                    @Override
+                    protected void result(Object object) {
+                        if ((Boolean) object == false) {
+                            return;
+                        }
+
+                        String colorName = nameTextField.getText();
+
+                        if ((colorName != null) && (colorName.isEmpty() == false)) {
+                            // Verify if the color name is already in use
+                            if (colors.containsKey(colorName) == true) {
+                                game.showMsgDlg("Error", "Color name already in use!", game.screenMain.stage);
+                            } else {
+                                // add the color (asuming RGBA)
+
+                                SkinColor newColor = new SkinColor(color);
+                                newColor.skinName = colorName;
+                                colors.put(colorName, newColor);
+                                game.screenMain.saveToSkin();
+
+                                // update table
+                                updateTable();
+                            }
+                        }
+                    }
+                };
+                dlg0.pad(20);
+                dlg0.getContentTable().add("Resource name:");
+                dlg0.getContentTable().add(nameTextField).pad(20);
+                dlg0.button("OK", true);
+                dlg0.button("Cancel", false);
+                dlg0.key(com.badlogic.gdx.Input.Keys.ENTER, true);
+                dlg0.key(com.badlogic.gdx.Input.Keys.ESCAPE, false);
+                dlg0.show(getStage());
+
+            }
+        }
+    };
+
+    ColorPicker colorPicker = new ColorPicker(newColorPickerAdapter);
 
     /**
      *
@@ -69,41 +122,8 @@ public class ColorPickerDialog extends Dialog {
 
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-
-                // Need to steal focus first with this hack (Thanks to Z-Man)
-                Frame frame = new Frame();
-                frame.setUndecorated(true);
-                frame.setOpacity(0);
-                frame.setLocationRelativeTo(null);
-                frame.setVisible(true);
-                frame.toFront();
-                frame.setVisible(false);
-                frame.dispose();
-
-                // Call swing color picker
-                java.awt.Color color = JColorChooser.showDialog(null, "Pick your color", java.awt.Color.WHITE);
-                if (color != null) {
-
-                    String colorName = JOptionPane.showInputDialog("Name your color");
-
-                    if ((colorName != null) && (colorName.isEmpty() == false)) {
-                        // Verify if the color name is already in use
-                        if (colors.containsKey(colorName) == true) {
-                            game.showMsgDlg("Error", "Color name already in use!", game.screenMain.stage);
-                        } else {
-                            // Add the color (asuming RGBA)
-                            float[] components = color.getComponents(null);
-                            SkinColor newColor = new SkinColor(components[0], components[1], components[2], components[3]);
-                            newColor.skinName = colorName;
-                            colors.put(colorName, newColor);
-                            game.screenMain.saveToSkin();
-
-                            // update table
-                            updateTable();
-                        }
-                    }
-                }
-
+                // Call color picker
+                getStage().addActor(colorPicker.fadeIn());
             }
 
         });
@@ -147,13 +167,14 @@ public class ColorPickerDialog extends Dialog {
 
     }
 
+
     /**
      * Refresh table content with colors from the skin
      */
     public void updateTable() {
 
         tableColors.clear();
-        tableColors.add(new Label("Color Name", game.skin, "title")).left().width(170);
+        tableColors.add(new Label("Color name", game.skin, "title")).left().width(170);
         tableColors.add(new Label("Value", game.skin, "title")).colspan(2).left().width(60).padRight(50);
 
         tableColors.row();
@@ -173,7 +194,38 @@ public class ColorPickerDialog extends Dialog {
             pixmap.drawRectangle(0, 0, 18, 18);
             Texture texture = new Texture(pixmap);
             pixmap.dispose();
-            tableColors.add(new Image(texture));
+
+
+            Image colorImage = new Image(texture);
+            colorImage.addListener(new ClickListener() {
+
+                public void clicked(InputEvent event, float x, float y) {
+                    // change color
+                    colorPicker.setColor(color);
+
+                    colorPicker.setListener(new ColorPickerAdapter() {
+                        @Override
+                        public void finished(final Color newColor) {
+                            Gdx.app.postRunnable(new Runnable() {
+                                @Override
+                                public void run() {
+                                    SkinColor changedColor = new SkinColor(newColor);
+                                    changedColor.skinName = key;
+                                    colors.put(key, changedColor);
+                                    game.screenMain.saveToSkin();
+                                    // update table
+                                    updateTable();
+                                }
+                            });
+                        }
+                    });
+                    // Call color picker
+                    ColorPickerDialog.this.getStage().addActor(colorPicker.fadeIn());
+                }
+
+            });
+
+            tableColors.add(colorImage);
             tableColors.add(color.toString()).left();
 
             TextButton buttonSelect = new TextButton("Select", game.skin);
@@ -197,7 +249,7 @@ public class ColorPickerDialog extends Dialog {
 
             });
 
-            TextButton buttonRemove = new TextButton("Remove", game.skin);
+            TextButton buttonRemove = new TextButton("remove", game.skin);
             buttonRemove.addListener(new ChangeListener() {
 
                 @Override

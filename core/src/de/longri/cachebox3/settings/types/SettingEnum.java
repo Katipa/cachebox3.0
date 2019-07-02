@@ -15,9 +15,9 @@
  */
 package de.longri.cachebox3.settings.types;
 
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import de.longri.cachebox3.utils.lists.CB_List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public class SettingEnum<EnumTyp extends Enum<?>> extends SettingString {
@@ -66,6 +66,7 @@ public class SettingEnum<EnumTyp extends Enum<?>> extends SettingString {
         setDirty();
     }
 
+
     public EnumTyp getEnumValue() {
         return getEnumFromString(value);
     }
@@ -87,12 +88,19 @@ public class SettingEnum<EnumTyp extends Enum<?>> extends SettingString {
         return ret;
     }
 
-    public void setEnumValue(EnumTyp value) {
-        if (this.myEnum == value)
-            return;
+//    public void setEnumValue(EnumTyp value) {
+//        if (this.myEnum == value)
+//            return;
+//        this.value = value.name();
+//        myEnum = value;
+//        setDirty();
+//    }
+
+    public void setEnumValue( Enum<?> value) {
         this.value = value.name();
-        myEnum = value;
+        myEnum = getEnumFromString(this.value);
         setDirty();
     }
+
 
 }

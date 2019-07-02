@@ -15,13 +15,14 @@
  */
 package de.longri.cachebox3.gui.views;
 
-import com.badlogic.gdx.scenes.scene2d.ui.WidgetGroup;
 import com.badlogic.gdx.utils.Align;
 import com.kotcrab.vis.ui.widget.VisLabel;
 import de.longri.cachebox3.CB;
+import de.longri.cachebox3.gui.menu.Menu;
 import de.longri.cachebox3.gui.widgets.CB_View_Base;
 import de.longri.cachebox3.gui.widgets.ColorWidget;
 import de.longri.cachebox3.utils.SkinColor;
+import de.longri.serializable.BitStore;
 
 /**
  * Created by Longri on 23.07.16.
@@ -31,10 +32,15 @@ public abstract class AbstractView extends CB_View_Base {
     ColorWidget colorWidget;
     VisLabel nameLabel;
 
+    public AbstractView(BitStore reader) {
+        super(reader.readString());
+        restoreInstanceState(reader);
+    }
+
     public AbstractView(String name) {
         super(name);
-        create();
     }
+
 
     protected void create() {
         // create a Label with name for default
@@ -42,17 +48,19 @@ public abstract class AbstractView extends CB_View_Base {
         nameLabel.setAlignment(Align.center);
         nameLabel.setPosition(10, 10);
 
-        colorWidget = new ColorWidget(CB.getSkin().get("abstract_background",SkinColor.class));
+        colorWidget = new ColorWidget(CB.getSkin().get("abstract_background", SkinColor.class));
         colorWidget.setBounds(0, 0, this.getWidth(), this.getHeight());
 
         this.addActor(colorWidget);
         this.addActor(nameLabel);
     }
 
+    @Override
     protected void sizeChanged() {
         super.sizeChanged();
         boundsChanged(this.getX(), this.getY(), this.getWidth(), this.getHeight());
     }
+
 
     protected void boundsChanged(float x, float y, float width, float height) {
         if (colorWidget != null) colorWidget.setBounds(0, 0, this.getWidth(), this.getHeight());
@@ -62,4 +70,26 @@ public abstract class AbstractView extends CB_View_Base {
     public String getName() {
         return this.NAME;
     }
+
+    public abstract boolean hasContextMenu();
+
+    public abstract Menu getContextMenu();
+
+    public final BitStore saveInstanceState() {
+        BitStore store = new BitStore();
+        store.write(this.getClass().getName());
+        store.write(this.NAME);
+        saveInstanceState(store);
+        return store;
+    }
+
+    public void saveInstanceState(BitStore writer) {
+
+    }
+
+    protected void restoreInstanceState(BitStore reader) {
+
+    }
+
+
 }

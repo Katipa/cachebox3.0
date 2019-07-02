@@ -15,37 +15,42 @@
  */
 package com.badlogic.gdx.scenes.scene2d.ui;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.*;
-import com.badlogic.gdx.scenes.scene2d.utils.*;
+import com.badlogic.gdx.graphics.g2d.freetype.SkinFont;
+import com.badlogic.gdx.scenes.scene2d.utils.BaseDrawable;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
+import com.badlogic.gdx.scenes.scene2d.utils.SpriteDrawable;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.*;
 import com.badlogic.gdx.utils.reflect.ClassReflection;
 import com.badlogic.gdx.utils.reflect.ReflectionException;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.PlatformConnector;
-import de.longri.cachebox3.gui.skin.styles.IconsStyle;
-import de.longri.cachebox3.gui.skin.styles.MenuIconStyle;
-import de.longri.cachebox3.gui.views.listview.ListView;
-import de.longri.cachebox3.gui.widgets.ColorDrawable;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
+import de.longri.cachebox3.gui.drawables.ColorDrawable;
+import de.longri.cachebox3.gui.drawables.FrameAnimationDrawable;
+import de.longri.cachebox3.gui.drawables.SvgNinePatchDrawable;
+import de.longri.cachebox3.gui.skin.styles.*;
+import de.longri.cachebox3.utils.NamedRunnable;
 import de.longri.cachebox3.utils.SkinColor;
 import org.oscim.backend.canvas.Bitmap;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 
 /**
  * Created by Longri on 20.07.2016.
  */
 public class SvgSkin extends Skin {
-    private final static Logger log = LoggerFactory.getLogger(SvgSkin.class);
-    private static final String SKIN_JSON_NAME = "skin.json";
+    private final static org.slf4j.Logger log = LoggerFactory.getLogger(SvgSkin.class);
+    public static final String SKIN_JSON_NAME = "skin.json";
     private boolean forceCreateNewAtlas = false;
     public IconsStyle getIcon;
     public MenuIconStyle getMenuIcon;
-
 
     public enum StorageType {
         LOCAL, INTERNAL
@@ -82,7 +87,7 @@ public class SvgSkin extends Skin {
      * Create a Skin from given Jason-file!
      * The drawable resources are created from Svg-Folder and putted into a Atlas
      *
-     * @param name        Name of this skin, will be used for create tmp cache folder!
+     * @param name        name of this skin, will be used for create tmp cache folder!
      * @param storageType LOCAL or INTERNAL
      * @param skinFolder  {@link FileHandle} to the folder of this skin
      */
@@ -100,7 +105,11 @@ public class SvgSkin extends Skin {
             skinFile = skinFolder.child(SKIN_JSON_NAME);
             this.skinFolder = skinFolder;
         }
-        load(skinFile);
+        try {
+            load(skinFile);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public void load(FileHandle skinFile) {
@@ -149,39 +158,55 @@ public class SvgSkin extends Skin {
      */
     @Override
     public Drawable getDrawable(String name) {
-        Drawable drawable = optional(name, Drawable.class);
-        if (drawable != null) return drawable;
+        Drawable drawable = null;
 
-        // Use texture or texture region. If it has splits, use ninepatch. If it has rotation or whitespace stripping, use sprite.
-        try {
-            TextureRegion textureRegion = getRegion(name);
-            if (textureRegion instanceof TextureAtlas.AtlasRegion) {
-                TextureAtlas.AtlasRegion region = (TextureAtlas.AtlasRegion) textureRegion;
-                if (region.splits != null)
-                    drawable = new NinePatchDrawable(getPatch(name));
-                else if (region.rotate || region.packedWidth != region.originalWidth || region.packedHeight != region.originalHeight)
-                    drawable = new SpriteDrawable(getSprite(name));
+        if (name.equals("NULL_DRAWABLE")) name = null;
+
+        if (name != null) {
+            drawable = optional(name, Drawable.class);
+            if (drawable != null) return drawable;
+
+            // Use texture or texture region. If it has splits, use ninepatch. If it has rotation or whitespace stripping, use sprite.
+            try {
+                TextureRegion textureRegion = getRegion(name);
+                if (textureRegion instanceof TextureAtlas.AtlasRegion) {
+                    TextureAtlas.AtlasRegion region = (TextureAtlas.AtlasRegion) textureRegion;
+                    if (region.splits != null)
+                        drawable = new SvgNinePatchDrawable(getPatch(name));
+                    else if (region.rotate || region.packedWidth != region.originalWidth || region.packedHeight != region.originalHeight)
+                        drawable = new SpriteDrawable(getSprite(name));
+                }
+                if (drawable == null) drawable = new TextureRegionDrawable(textureRegion);
+            } catch (GdxRuntimeException ignored) {
             }
-            if (drawable == null) drawable = new TextureRegionDrawable(textureRegion);
-        } catch (GdxRuntimeException ignored) {
+        } else {
+            name = "NULL_DRAWABLE";
+            drawable = optional(name, Drawable.class);
+            if (drawable != null) return drawable;
+            drawable = new ColorDrawable(Color.valueOf("#00000000"));
         }
 
-        // Check for explicit registration of ninepatch, sprite, or tiled drawable.
+        // Check for explicit registration of ninepatch, sprite, FrameAnimationDrawable or tiled drawable.
         if (drawable == null) {
             NinePatch patch = optional(name, NinePatch.class);
             if (patch != null)
-                drawable = new NinePatchDrawable(patch);
+                drawable = new SvgNinePatchDrawable(patch);
             else {
                 Sprite sprite = optional(name, Sprite.class);
                 if (sprite != null)
                     drawable = new SpriteDrawable(sprite);
                 else {
-                    ColorDrawable.ColorDrawableStyle colorDrawableStyle = optional(name, ColorDrawable.ColorDrawableStyle.class);
+                    ColorDrawableStyle colorDrawableStyle = optional(name, ColorDrawableStyle.class);
                     if (colorDrawableStyle != null) {
                         drawable = new ColorDrawable(colorDrawableStyle);
-                    } else
-                        throw new GdxRuntimeException(
-                                "No Drawable, NinePatch, TextureRegion, Texture, or Sprite registered with path: " + name);
+                    } else {
+                        FrameAnimationStyle frameAnimationStyle = optional(name, FrameAnimationStyle.class);
+                        if (frameAnimationStyle != null) {
+                            drawable = new FrameAnimationDrawable(frameAnimationStyle);
+                        } else
+                            throw new GdxRuntimeException(
+                                    "No Drawable, NinePatch, TextureRegion, Texture, or Sprite registered with path: " + name);
+                    }
                 }
             }
         }
@@ -202,7 +227,6 @@ public class SvgSkin extends Skin {
 
 
         final Skin skin = this;
-
         final Json json = new Json() {
             public <T> T readValue(Class<T> type, Class elementType, JsonValue jsonData) {
 
@@ -213,8 +237,21 @@ public class SvgSkin extends Skin {
 
 
                 // If the JSON is a string but the type is not, look up the actual value by path.
-                if (jsonData.isString() && !ClassReflection.isAssignableFrom(CharSequence.class, type))
+                if (jsonData.isString() && !ClassReflection.isAssignableFrom(CharSequence.class, type)) {
+                    if (ClassReflection.isEnum(type)) {
+                        try {
+                            return (T) type.getDeclaredMethod("valueOf", String.class).invoke(null, jsonData.asString());
+                        } catch (IllegalAccessException e) {
+                            e.printStackTrace();
+                        } catch (InvocationTargetException e) {
+                            e.printStackTrace();
+                        } catch (NoSuchMethodException e) {
+                            e.printStackTrace();
+                        }
+                        return null;
+                    }
                     return get(jsonData.asString(), type);
+                }
                 return super.readValue(type, elementType, jsonData);
             }
         };
@@ -228,7 +265,11 @@ public class SvgSkin extends Skin {
 
                         if (valueMap.name().equals(ScaledSvg.class.getName())) {
                             log.debug("read scaled SVG'S");
-                            readScaledSvgs(json, ClassReflection.forName(valueMap.name()), valueMap);
+                            try {
+                                readScaledSvgs(json, ClassReflection.forName(valueMap.name()), valueMap);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         } else {
                             readNamedObjects(json, ClassReflection.forName(valueMap.name()), valueMap);
                         }
@@ -259,9 +300,10 @@ public class SvgSkin extends Skin {
             private void readNamedObjects(Json json, Class type, JsonValue valueMap) {
                 Class addType = type == TintedDrawable.class ? Drawable.class : type;
                 for (JsonValue valueEntry = valueMap.child; valueEntry != null; valueEntry = valueEntry.next) {
-                    Object object = json.readValue(type, valueEntry);
-                    if (object == null) continue;
                     try {
+                        Object object = json.readValue(type, valueEntry);
+                        if (object == null) continue;
+
                         add(valueEntry.name, object, addType);
                         if (addType != Drawable.class && ClassReflection.isAssignableFrom(Drawable.class, addType))
                             add(valueEntry.name, object, Drawable.class);
@@ -281,31 +323,44 @@ public class SvgSkin extends Skin {
             }
         });
 
+        json.setSerializer(ListViewStyle.class, new Json.ReadOnlySerializer<ListViewStyle>() {
+            public ListViewStyle read(Json json, JsonValue jsonData, Class type) {
+                ListViewStyle style = new ListViewStyle();
 
-        json.setSerializer(ColorDrawable.class, new Json.ReadOnlySerializer<ColorDrawable>() {
-            public ColorDrawable read(Json json, JsonValue jsonData, Class type) {
-                Color color = json.readValue("color", Color.class, jsonData);
-                ColorDrawable drawable = new ColorDrawable(color);
-                return drawable;
-            }
-        });
+                String background = null, firstItem = null, secondItem = null, selectedItem = null, vScroll = null, vScrollKnob = null, hScroll = null, hScrollKnob = null;
 
-        json.setSerializer(ListView.ListViewStyle.class, new Json.ReadOnlySerializer<ListView.ListViewStyle>() {
-            public ListView.ListViewStyle read(Json json, JsonValue jsonData, Class type) {
-                ListView.ListViewStyle style = new ListView.ListViewStyle();
-
-                String background, firstItem, secondItem, selectedItem, vScroll = null, vScrollKnob = null, hScroll = null, hScrollKnob = null;
-
-                background = json.readValue("background", String.class, jsonData);
-                firstItem = json.readValue("firstItem", String.class, jsonData);
-                secondItem = json.readValue("secondItem", String.class, jsonData);
-                selectedItem = json.readValue("selectedItem", String.class, jsonData);
+                try {
+                    background = json.readValue("background", String.class, jsonData);
+                } catch (Exception e) {
+                    log.error("Read ListViewStyle background value", e);
+                }
+                try {
+                    firstItem = json.readValue("firstItem", String.class, jsonData);
+                } catch (Exception e) {
+                    log.error("Read ListViewStyle firstItem value", e);
+                }
+                try {
+                    secondItem = json.readValue("secondItem", String.class, jsonData);
+                } catch (Exception e) {
+                    log.error("Read ListViewStyle secondItem value", e);
+                }
+                try {
+                    selectedItem = json.readValue("selectedItem", String.class, jsonData);
+                } catch (Exception e) {
+                    log.error("Read ListViewStyle selectedItem value", e);
+                }
 
                 style.background = getDrawable(background);
                 style.firstItem = getDrawable(firstItem);
                 style.secondItem = getDrawable(secondItem);
                 style.selectedItem = getDrawable(selectedItem);
 
+                try {
+                    style.emptyFont = getFont(json.readValue("emptyFont", String.class, jsonData));
+                    style.emptyFontColor = getColor(json.readValue("emptyFontColor", String.class, jsonData));
+                } catch (Exception e) {
+                    log.error("Read ListViewStyle emptyFont/Color value", e);
+                }
 
                 style.pad = json.readValue("pad", float.class, 0f, jsonData);
                 style.padLeft = json.readValue("padLeft", float.class, 0f, jsonData);
@@ -342,18 +397,18 @@ public class SvgSkin extends Skin {
             }
         });
 
-        json.setSerializer(SvgNinePatchDrawable.class, new Json.ReadOnlySerializer<SvgNinePatchDrawable>() {
-            public SvgNinePatchDrawable read(Json json, JsonValue jsonData, Class type) {
+        json.setSerializer(SvgNinePatchDrawable.class, new Json.ReadOnlySerializer<de.longri.cachebox3.gui.drawables.SvgNinePatchDrawable>() {
+            public de.longri.cachebox3.gui.drawables.SvgNinePatchDrawable read(Json json, JsonValue jsonData, Class type) {
 
                 String name = json.readValue("name", String.class, jsonData);
                 int left = json.readValue("left", int.class, 0, jsonData);
                 int right = json.readValue("right", int.class, 0, jsonData);
                 int top = json.readValue("top", int.class, 0, jsonData);
                 int bottom = json.readValue("bottom", int.class, 0, jsonData);
-                int leftWidth = json.readValue("leftWidth", int.class, 0, jsonData);
-                int rightWidth = json.readValue("rightWidth", int.class, 0, jsonData);
-                int topHeight = json.readValue("topHeight", int.class, 0, jsonData);
-                int bottomHeight = json.readValue("bottomHeight", int.class, 0, jsonData);
+                int leftWidth = json.readValue("leftWidth", int.class, -1, jsonData);
+                int rightWidth = json.readValue("rightWidth", int.class, -1, jsonData);
+                int topHeight = json.readValue("topHeight", int.class, -1, jsonData);
+                int bottomHeight = json.readValue("bottomHeight", int.class, -1, jsonData);
 
                 SvgNinePatchDrawable.SvgNinePatchDrawableUnScaledValues values = new SvgNinePatchDrawable.SvgNinePatchDrawableUnScaledValues();
                 values.left = left;
@@ -365,32 +420,11 @@ public class SvgSkin extends Skin {
                 values.topHeight = topHeight;
                 values.bottomHeight = bottomHeight;
 
+
                 // get texture region
                 TextureRegion textureRegion = getRegion(name);
+                SvgNinePatchDrawable svgNinePatchDrawable = SvgSkinUtil.getSvgNinePatchDrawable(left, right, top, bottom, leftWidth, rightWidth, topHeight, bottomHeight, textureRegion);
 
-                //scale nine patch regions
-                left = CB.getScaledInt(left);
-                right = CB.getScaledInt(right);
-                top = CB.getScaledInt(top);
-                bottom = CB.getScaledInt(bottom);
-                leftWidth = leftWidth == 0 ? left : CB.getScaledInt(leftWidth);
-                rightWidth = rightWidth == 0 ? right : CB.getScaledInt(rightWidth);
-                topHeight = topHeight == 0 ? top : CB.getScaledInt(topHeight);
-                bottomHeight = bottomHeight == 0 ? bottom : CB.getScaledInt(bottomHeight);
-
-
-                // if any value < 0 set to half width or height!
-                if (left < 0) left = textureRegion.getRegionWidth() / 2;
-                if (right < 0) right = textureRegion.getRegionWidth() / 2;
-                if (top < 0) top = textureRegion.getRegionHeight() / 2;
-                if (bottom < 0) bottom = textureRegion.getRegionHeight() / 2;
-                if (leftWidth < 0) leftWidth = textureRegion.getRegionWidth() / 2;
-                if (rightWidth < 0) rightWidth = textureRegion.getRegionWidth() / 2;
-                if (topHeight < 0) topHeight = textureRegion.getRegionHeight() / 2;
-                if (bottomHeight < 0) bottomHeight = textureRegion.getRegionHeight() / 2;
-
-                SvgNinePatchDrawable svgNinePatchDrawable = new SvgNinePatchDrawable(new NinePatch(textureRegion, left, right, top, bottom),
-                        leftWidth, rightWidth, topHeight, bottomHeight);
 
                 svgNinePatchDrawable.name = name;
                 svgNinePatchDrawable.values = values;
@@ -401,16 +435,28 @@ public class SvgSkin extends Skin {
 
         json.setSerializer(BitmapFont.class, new Json.ReadOnlySerializer<BitmapFont>() {
             public BitmapFont read(Json json, JsonValue jsonData, Class type) {
-                String path = json.readValue("font", String.class, jsonData);
-                int scaledSize = json.readValue("size", int.class, -1, jsonData);
+                final String path = json.readValue("font", String.class, jsonData);
+                final int scaledSize = json.readValue("size", int.class, -1, jsonData);
 
-                FileHandle fontFile = skinFile.parent().child(path);
-//                if (!fontFile.exists()) fontFile = Gdx.files.internal(path);
+                final FileHandle fontFile = skinFile.parent().child(path);
                 if (!fontFile.exists()) throw new SerializationException("Font file not found: " + fontFile);
 
                 try {
-                    SkinFont font = new SkinFont(path, fontFile, scaledSize);
-                    return font;
+                    final com.badlogic.gdx.graphics.g2d.freetype.SkinFont[] font = new SkinFont[1];
+                    try {
+                        Thread.sleep(20);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+
+                    CB.postOnGlThread(new NamedRunnable("SvgSkin") {
+                        @Override
+                        public void run() {
+                            FileHandle cacheFileHandle = Gdx.files.absolute(CB.WorkPath + SvgSkinUtil.TMP_UI_ATLAS_PATH + name);
+                            font[0] = new SkinFont(path, fontFile, scaledSize, cacheFileHandle);
+                        }
+                    }, true);
+                    return font[0];
                 } catch (RuntimeException ex) {
                     throw new SerializationException("Error loading bitmap font: " + fontFile, ex);
                 }
@@ -429,7 +475,7 @@ public class SvgSkin extends Skin {
                 float r = json.readValue("r", float.class, 0f, jsonData);
                 float g = json.readValue("g", float.class, 0f, jsonData);
                 float b = json.readValue("b", float.class, 0f, jsonData);
-                float a = json.readValue("a", float.class, 1f, jsonData);
+                float a = json.readValue("a", float.class, 0f, jsonData);
                 SkinColor c = new SkinColor(r, g, b, a);
                 c.skinName = jsonData.name;
                 return c;
@@ -459,6 +505,7 @@ public class SvgSkin extends Skin {
 
         return json;
     }
+
 
     @Override
     public <T> T get(String name, Class<T> type) {

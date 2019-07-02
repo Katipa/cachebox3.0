@@ -15,13 +15,13 @@
  */
 package de.longri.cachebox3.sqlite.dao;
 
-import com.badlogic.gdx.sql.SQLiteGdxDatabaseCursor;
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
 import de.longri.cachebox3.sqlite.Database;
 import de.longri.cachebox3.sqlite.Database.Parameters;
 import de.longri.cachebox3.types.Category;
 import de.longri.cachebox3.types.GpxFilename;
+import de.longri.gdx.sqlite.GdxSqliteCursor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.text.DateFormat;
@@ -32,7 +32,7 @@ import java.util.Date;
 public class CategoryDAO {
     final static Logger log = LoggerFactory.getLogger(CategoryDAO.class);
 
-    public Category ReadFromCursor(SQLiteGdxDatabaseCursor reader) {
+    public Category ReadFromCursor(GdxSqliteCursor reader) {
         Category result = new Category();
 
         result.Id = reader.getLong(0);
@@ -40,7 +40,7 @@ public class CategoryDAO {
         result.pinned = reader.getInt(2) != 0;
 
         // alle GpxFilenames einlesen
-        SQLiteGdxDatabaseCursor reader2 = Database.Data.rawQuery("select ID, GPXFilename, Imported, CacheCount from GpxFilenames where CategoryId=?", new String[]
+        GdxSqliteCursor reader2 = Database.Data.rawQuery("select ID, GPXFilename, Imported, CacheCount from GpxFilenames where CategoryId=?", new String[]
                 {String.valueOf(result.Id)});
         reader2.moveToFirst();
         while (reader2.isAfterLast() == false) {
@@ -70,7 +70,7 @@ public class CategoryDAO {
 
         long Category_ID = 0;
 
-        SQLiteGdxDatabaseCursor reader = Database.Data.rawQuery("Select max(ID) from Category", null);
+        GdxSqliteCursor reader = Database.Data.rawQuery("Select max(ID) from Category", (String[]) null);
         reader.moveToFirst();
         if (reader.isAfterLast() == false) {
             Category_ID = reader.getLong(0);
@@ -90,8 +90,7 @@ public class CategoryDAO {
         Parameters args = new Parameters();
         args.put("GPXFilename", filename);
         args.put("CategoryId", category.Id);
-        DateFormat iso8601Format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String stimestamp = iso8601Format.format(new Date());
+        String stimestamp = Database.cbDbFormat.format(new Date());
         args.put("Imported", stimestamp);
         try {
             Database.Data.insert("GpxFilenames", args);
@@ -101,7 +100,7 @@ public class CategoryDAO {
 
         long GPXFilename_ID = 0;
 
-        SQLiteGdxDatabaseCursor reader = Database.Data.rawQuery("Select max(ID) from GpxFilenames", null);
+        GdxSqliteCursor reader = Database.Data.rawQuery("Select max(ID) from GpxFilenames", (String[]) null);
         reader.moveToFirst();
         if (reader.isAfterLast() == false) {
             GPXFilename_ID = reader.getLong(0);

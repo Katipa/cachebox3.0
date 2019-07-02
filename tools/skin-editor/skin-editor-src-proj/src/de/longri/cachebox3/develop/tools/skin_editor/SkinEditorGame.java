@@ -26,9 +26,9 @@ import com.badlogic.gdx.scenes.scene2d.ui.SavableSvgSkin;
 import com.badlogic.gdx.tools.texturepacker.TexturePacker;
 import com.kotcrab.vis.ui.VisUI;
 import com.kotcrab.vis.ui.widget.file.FileChooser;
+import de.longri.cachebox3.CB;
 import de.longri.cachebox3.develop.tools.skin_editor.screens.MainScreen;
 import de.longri.cachebox3.develop.tools.skin_editor.screens.WelcomeScreen;
-import de.longri.cachebox3.logging.Logger;
 
 
 /**
@@ -42,7 +42,10 @@ public class SkinEditorGame extends Game {
         FileChooser.setDefaultPrefsName("SkinEditor");
     }
 
-    public final static String[] widgets = {"MapWayPointItem", "Sizes", "Icons", "MenuIcons", "Label", "Button", "TextButton", "CheckBox", "TextField", "List", "SelectBox", "ProgressBar", "Slider", "ScrollPane", "SplitPane", "Window", "Tree"};
+    public final static String[] widgets = {"MapWayPointItem", "Sizes", "Icons", "MenuIcons", "Filter", "Label", "EditText", "Button",
+            "GestureButton", "TextButton", "FileChooser", "Compass", "CacheTypes", "AttributeTypes", "LogTypes", "CheckBox", "TextField", "ListView",
+            "SelectBox", "CB_ProgressBar", "Slider", "ScrollPane", "SplitPane", "Window", "Tree", "Animation", "Language"
+            , "Setting", "CacheListItem", "StarStyle", "CacheSizeStyle"};
 
     public SpriteBatch batch;
     public SavableSvgSkin skin;
@@ -63,8 +66,7 @@ public class SkinEditorGame extends Game {
     @Override
     public void create() {
 
-        Logger.setCurrentLogLevel(Logger.LOG_LEVEL_TRACE);
-
+        CB.setGlThread(Thread.currentThread());
 
         opt = new OptionalChecker();
 
@@ -94,13 +96,13 @@ public class SkinEditorGame extends Game {
         skin = new SavableSvgSkin("UiSkin");
 
         // add skin editor Texture pack
-        skin.addRegions(new TextureAtlas(Gdx.files.classpath("resources/uiskin.atlas")));
+        skin.addRegions(new TextureAtlas(Gdx.files.internal("skin-editor-src-proj/assets/resources/uiskin.atlas")));
 
         // add VisUi Texture pack
-        skin.addRegions(new TextureAtlas(Gdx.files.classpath("resources/visuiskin.atlas")));
+        skin.addRegions(new TextureAtlas(Gdx.files.internal("skin-editor-src-proj/assets/resources/visuiskin.atlas")));
 
 
-        skin.load(Gdx.files.classpath("resources/visuiskin.json"));
+        skin.load(Gdx.files.internal("skin-editor-src-proj/assets/resources/visuiskin.json"));
 
         VisUI.load(skin);
 
@@ -127,9 +129,11 @@ public class SkinEditorGame extends Game {
     }
 
 
-    public String resolveWidgetPackageName(String widget) {
+    public static String resolveWidgetPackageName(String widget) {
         if (widget.equals("MapWayPointItem")) {
             return "de.longri.cachebox3.gui.skin.styles.MapWayPointItemStyle";
+        } else if (widget.equals("GestureButton")) {
+            return "de.longri.cachebox3.gui.skin.styles.GestureButtonStyle";
         } else if (widget.equals("Sizes")) {
             return "de.longri.cachebox3.gui.skin.styles.ScaledSize";
         } else if (widget.equals("Icons")) {
@@ -138,13 +142,51 @@ public class SkinEditorGame extends Game {
             return "de.longri.cachebox3.gui.skin.styles.MenuIconStyle";
         } else if (widget.equals("TextButton")) {
             return "com.kotcrab.vis.ui.widget.VisTextButton$VisTextButtonStyle";
+        } else if (widget.equals("ListView")) {
+            return "de.longri.cachebox3.gui.views.listview.ListView$ListViewStyle";
+        } else if (widget.equals("FileChooser")) {
+            return "de.longri.cachebox3.gui.skin.styles.FileChooserStyle";
+        } else if (widget.equals("Compass")) {
+            return "de.longri.cachebox3.gui.skin.styles.CompassStyle";
+        } else if (widget.equals("CacheTypes")) {
+            return "de.longri.cachebox3.gui.skin.styles.CacheTypeStyle";
+        } else if (widget.equals("Animation")) {
+            return "de.longri.cachebox3.gui.skin.styles.FrameAnimationStyle";
+        } else if (widget.equals("SelectBox")) {
+            return "de.longri.cachebox3.gui.skin.styles.SelectBoxStyle";
+        } else if (widget.equals("EditText")) {
+            return "de.longri.cachebox3.gui.skin.styles.EditTextStyle";
+        } else if (widget.equals("AttributeTypes")) {
+            return "de.longri.cachebox3.gui.skin.styles.AttributesStyle";
+        } else if (widget.equals("Language")) {
+            return "de.longri.cachebox3.gui.skin.styles.LanguageStyle";
+        } else if (widget.equals("LogTypes")) {
+            return "de.longri.cachebox3.gui.skin.styles.LogTypesStyle";
+        } else if (widget.equals("Filter")) {
+            return "de.longri.cachebox3.gui.skin.styles.FilterStyle";
+        } else if (widget.equals("Setting")) {
+            return "de.longri.cachebox3.gui.activities.Settings_Activity$SettingsActivityStyle";
+        } else if (widget.equals("CacheListItem")) {
+            return "de.longri.cachebox3.gui.skin.styles.CacheListItemStyle";
+        } else if (widget.equals("StarStyle")) {
+            return "de.longri.cachebox3.gui.skin.styles.StarsStyle";
+        } else if (widget.equals("CacheSizeStyle")) {
+            return "de.longri.cachebox3.gui.skin.styles.CacheSizeStyle";
         } else {
+
+            for (Class clazz : StyleTypes.items) {
+                if (clazz.getSimpleName().equals(widget)) {
+                    return clazz.getName();
+                }
+            }
             return "com.badlogic.gdx.scenes.scene2d.ui." + widget + "$" + widget + "Style";
         }
+
+
     }
 
 
-//
+//Language
 
     /**
      * Display a dialog with a notice

@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2014-2017 team-cachebox.de
  *
  * Licensed under the : GNU General protected License (GPL);
@@ -22,9 +22,7 @@ import de.longri.cachebox3.settings.types.SettingsList;
  */
 public abstract class Settings_Const {
 
-    static {
-        new SettingsList();
-    }
+    public static final SettingsList settingsList = new SettingsList();
 
     protected static final de.longri.cachebox3.settings.types.SettingMode DEVELOPER = de.longri.cachebox3.settings.types.SettingMode.DEVELOPER;
     protected static final de.longri.cachebox3.settings.types.SettingMode NORMAL = de.longri.cachebox3.settings.types.SettingMode.Normal;
@@ -47,7 +45,7 @@ public abstract class Settings_Const {
 
     protected static final Integer[] approach = new Integer[]{0, 2, 10, 25, 50, 100, 200, 500, 1000};
     protected static final Integer[] TrackDistanceArray = new Integer[]{1, 3, 5, 10, 20};
-    protected static final String[] navis = new String[]{"Navigon", "Google", "Copilot", "OsmAnd", "OsmAnd2", "Waze", "Orux", "Ask"};
+    protected static final String[] Navis = new String[]{"Navigon", "Google", "Copilot", "OsmAnd", "OsmAnd2", "Waze", "Orux", "Ask"};
 
 
 }

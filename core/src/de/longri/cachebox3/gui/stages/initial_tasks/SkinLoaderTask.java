@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016 - 2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -15,32 +15,61 @@
  */
 package de.longri.cachebox3.gui.stages.initial_tasks;
 
+import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
-import com.badlogic.gdx.graphics.g3d.Model;
+import com.badlogic.gdx.scenes.scene2d.ui.ScaledSvg;
+import com.badlogic.gdx.scenes.scene2d.ui.StoreSvg;
 import com.badlogic.gdx.scenes.scene2d.ui.SvgSkin;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.kotcrab.vis.ui.VisUI;
 import de.longri.cachebox3.CB;
+import de.longri.cachebox3.PlatformConnector;
+import de.longri.cachebox3.events.EventHandler;
+import de.longri.cachebox3.events.IncrementProgressEvent;
+import de.longri.cachebox3.gui.skin.styles.AttributesStyle;
 import de.longri.cachebox3.settings.Settings;
+import de.longri.cachebox3.types.Attributes;
 import de.longri.cachebox3.utils.DevicesSizes;
+import de.longri.cachebox3.utils.NamedRunnable;
 import de.longri.cachebox3.utils.SizeF;
+import org.oscim.backend.CanvasAdapter;
+import org.oscim.backend.canvas.Bitmap;
+import org.oscim.core.Tile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by Longri on 02.08.16.
  */
 public final class SkinLoaderTask extends AbstractInitTask {
+    private final Logger log = LoggerFactory.getLogger(SkinLoaderTask.class);
 
-    private static final String INTERNAL_SKIN_DEFAULT_NAME = "internalDefault";
-
-    public static Model myLocationModel, compassModel, compassGrayModel, compassYellowModel;
-
-    public SkinLoaderTask(String name, int percent) {
-        super(name, percent);
+    public SkinLoaderTask(String name) {
+        super(name);
     }
 
     @Override
     public void runnable() {
+
+        if (Gdx.app.getType() == Application.ApplicationType.iOS) {
+            // if exist a "reset.tmp" file on iTunes shared folder
+            // delete tmp skin files
+            String sharedFilerPath = Settings.MapPackFolder.getDefaultValue();
+            FileHandle sharedFolderResetTmp = new FileHandle(sharedFilerPath).child("reset.tmp");
+            if (sharedFolderResetTmp.exists() && !sharedFolderResetTmp.isDirectory()) {
+                log.debug("found \"reset.tmp\" file, delete temp skinFolder");
+                sharedFolderResetTmp.delete();
+                FileHandle tempFolder = new FileHandle(CB.WorkPath).child("user/temp");
+                if (!tempFolder.deleteDirectory()) {
+                    log.warn("can't delete temp folder");
+                }
+            }
+        }
+
 
         //initial sizes
         DevicesSizes ui = new DevicesSizes();
@@ -54,7 +83,7 @@ public final class SkinLoaderTask extends AbstractInitTask {
         FileHandle skinFileHandle = null;
 
 
-        //Get selected skin name and check if available
+        //get selected skin name and check if available
         if (Settings.nightMode.getValue()) {
             if (!Settings.nightSkinName.isDefault()) {
                 // check if skin exist into skin folder
@@ -97,14 +126,13 @@ public final class SkinLoaderTask extends AbstractInitTask {
             }
         }
 
-
-        // the SvgSkin must create in a OpenGL context. so we post a runnable and wait!
         final AtomicBoolean wait = new AtomicBoolean(true);
 
         final String finalSkinName = skinName;
         final SvgSkin.StorageType finalType = storageType;
         final FileHandle finalSkinFileHandle = skinFileHandle;
-        Gdx.app.postRunnable(new Runnable() {
+
+        Thread thread = new Thread(new Runnable() {
             @Override
             public void run() {
                 CB.setActSkin(new SvgSkin(false, finalSkinName, finalType, finalSkinFileHandle));
@@ -112,6 +140,7 @@ public final class SkinLoaderTask extends AbstractInitTask {
                 wait.set(false);
             }
         });
+        thread.start();
 
         while (wait.get()) {
             try {
@@ -120,18 +149,72 @@ public final class SkinLoaderTask extends AbstractInitTask {
             }
         }
 
-        //add myLocationModel to skin
-        SvgSkin skin = CB.getSkin();
-        skin.add("MyLocationModel", myLocationModel, Model.class);
-        skin.add("compassModel", compassModel, Model.class);
-        skin.add("compassGrayModel", compassGrayModel, Model.class);
-        skin.add("compassYellowModel", compassYellowModel, Model.class);
+
+        //after skin loading store attribute icons for HTML description view
+        //copy attributes*.png to data folder
+        //this png files are used on description view, as Html image
+
+
+        //TODO store temp on generated skin for skin changes
+        FileHandle attFileHandle = Gdx.files.absolute(CB.WorkPath + "/data/Attributes");
+        attFileHandle.mkdirs();
+
+
+        SvgSkin skin = (SvgSkin) VisUI.getSkin();
+        AttributesStyle style = VisUI.getSkin().get("CompassView", AttributesStyle.class);
+
+        Attributes[] values = Attributes.values();
+        for (int i = 0, n = values.length; i < n; i++) {
+            Attributes value = values[i];
+            value.setNegative();
+            storeAttributePng(skin, style, attFileHandle, value);
+            value.setPositive();
+            storeAttributePng(skin, style, attFileHandle, value);
+        }
+
+        // todo do not preload theme, if no mapsforge map is selected
+        //preload Map Theme on async task
+        CB.postAsync(new NamedRunnable("preload Map Theme") {
+            @Override
+            public void run() {
+                //calculate CanvasAdapter.dpi
+                float scaleFactor = CB.getScaledFloat(Settings.MapViewDPIFaktor.getValue());
+                CanvasAdapter.dpi = CanvasAdapter.DEFAULT_DPI * scaleFactor;
+                CanvasAdapter.textScale = Settings.MapViewTextFaktor.getValue();
+                Tile.SIZE = Tile.calculateTileSize();
+                CB.setCurrentTheme(CB.ThemeIsFor.day); // todo set the correct parameter
+            }
+        });
+    }
+
+    @Override
+    public int getProgressMax() {
+        return (Attributes.values().length * 2)
+                + (9 /*TODO get count of used fonts*/)
+                + 1; // load TextureAtlas. With create new Texture Atlas is fire a Event with increase progress max
     }
 
 
-    private void loadInternaleDefaultSkin() {
+    private void storeAttributePng(SvgSkin skin, AttributesStyle style, FileHandle attFileHandle, Attributes value) {
+
+        String imageName = value.getImageName() + ".png";
+        FileHandle storeFile = attFileHandle.child(imageName);
+        if (storeFile.exists()) return;
+        EventHandler.fire(new IncrementProgressEvent(1, "generate attribute image: " + imageName));
 
 
+        TextureRegionDrawable drawable = (TextureRegionDrawable) value.getDrawable(style);
+        if (drawable == null) return;
+        ScaledSvg scaledSvg = skin.get(drawable.getName(), ScaledSvg.class);
+        Bitmap bitmap = null;
+        try {
+            FileHandle svgFile = skin.skinFolder.child(scaledSvg.path);
+            bitmap = PlatformConnector.getSvg(scaledSvg.getRegisterName(), svgFile.read(), PlatformConnector.SvgScaleType.DPI_SCALED, scaledSvg.scale);
+        } catch (IOException e) {
+            log.error("", e);
+        }
+        StoreSvg storeSvg = (StoreSvg) bitmap;
+        storeSvg.store(storeFile);
+        log.debug("store {} png", bitmap);
     }
-
 }

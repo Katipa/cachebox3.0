@@ -15,7 +15,11 @@
  */
 package de.longri.cachebox3;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
 import com.badlogic.gdx.files.FileHandle;
+import de.longri.cachebox3.callbacks.GenericCallBack;
+import de.longri.cachebox3.utils.NamedRunnable;
 import org.oscim.backend.canvas.Bitmap;
 
 import java.io.IOException;
@@ -36,6 +40,12 @@ public abstract class PlatformConnector {
         return platformConnector._isTorchAvailable();
     }
 
+    public static String createThumb(String path, int scaledWidth, String thumbPrefix) {
+        return platformConnector._createThumb(path, scaledWidth, thumbPrefix);
+    }
+
+    protected abstract String _createThumb(String path, int scaledWidth, String thumbPrefix);
+
     protected abstract boolean _isTorchAvailable();
 
     public static boolean isTorchOn() {
@@ -49,6 +59,59 @@ public abstract class PlatformConnector {
     }
 
     protected abstract void _switchTorch();
+
+    public static void getApiKey(GenericCallBack<String> callBack) {
+        platformConnector.generateApiKey(callBack);
+    }
+
+    public static void getDescriptionView(GenericCallBack<PlatformDescriptionView> callBack) {
+        platformConnector.getPlatformDescriptionView(callBack);
+    }
+
+    public static void setDescriptionViewToNULL() {
+        platformConnector.descriptionViewToNull();
+    }
+
+    protected abstract void descriptionViewToNull();
+
+    public static void _openUrlExtern(final String link) {
+        if (CB.isGlThread()) {
+            platformConnector.openUrlExtern(link);
+        } else {
+            Gdx.app.postRunnable(new Runnable() {
+                @Override
+                public void run() {
+                    platformConnector.openUrlExtern(link);
+                }
+            });
+        }
+    }
+
+    public abstract void openUrlExtern(String link);
+
+    public static void callQuit() {
+        platformConnector._callQuit();
+    }
+
+    protected abstract void _callQuit();
+
+    protected abstract void _postOnMainThread(NamedRunnable runnable);
+
+    public static void postOnMainThread(NamedRunnable runnable) {
+        platformConnector._postOnMainThread(runnable);
+    }
+
+    public static void runOnBackGround(Runnable backgroundTask) {
+        platformConnector._runOnBackGround(backgroundTask);
+    }
+
+    protected abstract void _runOnBackGround(Runnable backgroundTask);
+
+    public static void playNotifySound(FileHandle soundFileHandle) {
+        platformConnector._playNotifySound(soundFileHandle);
+    }
+
+    protected abstract void _playNotifySound(FileHandle soundFileHandle);
 
     // SVG implementations #############################################################################################
     public enum SvgScaleType {
@@ -64,13 +127,6 @@ public abstract class PlatformConnector {
                                             SvgScaleType scaleType, float scaleValue) throws IOException;
 
 
-    public abstract void initialLocationReciver();
-
-    public static void initLocationListener() {
-        platformConnector.initialLocationReciver();
-    }
-
-
     public static FileHandle getSandboxFileHandle(String fileName) {
         return platformConnector._getSandBoxFileHandle(fileName);
     }
@@ -83,4 +139,19 @@ public abstract class PlatformConnector {
 
     protected abstract String _getWorkPath();
 
+    protected abstract void generateApiKey(GenericCallBack<String> callBack);
+
+    protected abstract void getPlatformDescriptionView(GenericCallBack<PlatformDescriptionView> callBack);
+
+
+    //Text Input
+    public static void getSinglelineTextInput(Input.TextInputListener listener, CharSequence title, CharSequence text, CharSequence hint) {
+        Gdx.input.getTextInput(listener, title.toString(), text.toString(), hint.toString());
+    }
+
+    public abstract void _getMultilineTextInput(Input.TextInputListener listener, String title, String text, String hint);
+
+    public static void getMultilineTextInput(Input.TextInputListener listener, String title, String text, String hint) {
+        platformConnector._getMultilineTextInput(listener, title, text, hint);
+    }
 }

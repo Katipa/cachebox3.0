@@ -17,15 +17,30 @@ package de.longri.cachebox3.gui.skin.styles;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.scenes.scene2d.ui.SvgNinePatchDrawable;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 
 /**
  * Created by Longri on 27.01.17.
  */
 public class ButtonDialogStyle {
-    public SvgNinePatchDrawable title, header, center, footer;
+    public Drawable title;
+    public Drawable header;
+    public Drawable center;
+    public Drawable footer;
     public Drawable stageBackground;
     public BitmapFont titleFont;
     public Color titleFontColor;
+
+    public ButtonDialogStyle() {
+    }
+
+    public ButtonDialogStyle(ButtonDialogStyle other) {
+        title = other.title;
+        header = other.header;
+        center = other.center;
+        footer = other.footer;
+        stageBackground = other.stageBackground;
+        titleFont = other.titleFont;
+        titleFontColor = other.titleFontColor;
+    }
 }

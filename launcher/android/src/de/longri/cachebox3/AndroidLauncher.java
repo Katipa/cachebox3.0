@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 team-cachebox.de
+ * Copyright (C) 2016 - 2017 team-cachebox.de
  *
  * Licensed under the : GNU General Public License (GPL);
  * you may not use this file except in compliance with the License.
@@ -15,122 +15,102 @@
  */
 package de.longri.cachebox3;
 
-import android.content.Context;
-import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
-import android.hardware.SensorManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
-import com.badlogic.gdx.backends.android.AndroidApplication;
-import com.badlogic.gdx.backends.android.AndroidApplicationConfiguration;
-import com.badlogic.gdx.utils.SharedLibraryLoader;
-import de.longri.cachebox3.locator.Locator;
-import org.oscim.android.gl.AndroidGL;
-import org.oscim.backend.GLAdapter;
-import org.oscim.gdx.GdxAssets;
-import org.sqldroid.SQLDroidDriver;
+import android.support.annotation.NonNull;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentTransaction;
+import android.view.ViewGroup;
+import android.widget.RelativeLayout;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.backends.android.AndroidFragmentApplication;
+import de.longri.cachebox3.locator.manager.Android_LocationHandler;
+import org.oscim.backend.DateTime;
+import org.oscim.backend.DateTimeAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class AndroidLauncher extends AndroidApplication {
-
-    static {
-        try {
-            java.sql.DriverManager.registerDriver(new SQLDroidDriver());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-    }
+public class AndroidLauncher extends FragmentActivity implements AndroidFragmentApplication.Callbacks {
+    private final static Logger log = LoggerFactory.getLogger(AndroidLauncher.class);
+    public static AndroidLauncher androidLauncher;
 
 
-    // Compass
-    private SensorManager mSensorManager;
-    private Sensor mSensor;
-    private float[] mCompassValues;
+    private AndroidLauncherfragment fragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        fragment = new AndroidLauncherfragment();
+        FragmentTransaction trans = getSupportFragmentManager().beginTransaction();
+        trans.replace(android.R.id.content, fragment);
+        trans.commit();
 
-        // Don't change this LogLevel
-        // Cachebox use the slf4j implematation for LibGdx as Log engine.
-        // so set LogLevel on CB.class if you wont (USED_LOG_LEVEL)
-        this.setLogLevel(LOG_DEBUG);
+        androidLauncher = this;
 
-        //initialize platform bitmap factory
-        org.oscim.android.canvas.AndroidGraphics.init();
+        CB.locationHandler = new Android_LocationHandler();
 
-        //initialize platform connector
-        PlatformConnector.init(new AndroidPlatformConnector(this));
+        Bitmap bm = BitmapFactory.decodeResource(getResources(), R.drawable.ic_launcher);
+        int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resId > 0) {
+            CB.androidStatusbarHeight = getResources().getDimensionPixelSize(resId);
+        } else {
+            CB.androidStatusbarHeight = bm.getHeight() / 2;
+        }
 
-//        DisplayMetrics metrics = getResources().getDisplayMetrics();
-//        CanvasAdapter.dpi = (int) Math.max(metrics.xdpi, metrics.ydpi);
-
-        GdxAssets.init("");
-        GLAdapter.init(new AndroidGL());
-
-        AndroidApplicationConfiguration config = new AndroidApplicationConfiguration();
-        config.stencil = 8;
-        config.numSamples = 2;
-        new SharedLibraryLoader().load("vtm-jni");
-        initialize(new CacheboxMain(), config);
-
-        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        mSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
-
-        setApplicationLogger(new Android_ApplicationLogger());
+        DateTimeAdapter.init(new DateTime());
     }
 
     protected void onStart() {
         super.onStart();
+        log.debug("onStart()");
 
         if (android.os.Build.VERSION.SDK_INT >= 23) {
             AndroidPermissionCheck.checkNeededPermissions(this);
         }
 
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                // TODO Auto-generated method stub
-
-            }
-        });
+        Gdx.input.setCatchBackKey(true);
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        // permission changed, reinitialize PlatformConnector
+        PlatformConnector.init(new AndroidPlatformConnector(fragment));
+    }
 
     @Override
     protected void onResume() {
+        log.debug("onResume()");
         super.onResume();
-        if (mSensorManager != null)
-            mSensorManager.registerListener(mListener, mSensor, SensorManager.SENSOR_DELAY_UI);
     }
 
     @Override
     protected void onStop() {
+        log.debug("onStop()");
         super.onStop();
-
-        if (mSensorManager != null)
-            mSensorManager.unregisterListener(mListener);
-
     }
 
-    private float compassHeading = -1;
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+    }
 
-    private final SensorEventListener mListener = new SensorEventListener() {
-        @Override
-        public void onSensorChanged(SensorEvent event) {
-            try {
-                mCompassValues = event.values;
-                compassHeading = mCompassValues[0];
-                Locator.setHeading(compassHeading, Locator.CompassType.Magnetic);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
 
-        @Override
-        public void onAccuracyChanged(Sensor sensor, int accuracy) {
-        }
-    };
+    @Override
+    public void exit() {
+        finish();
+    }
 
+    public void show(AndroidDescriptionView descriptionView) {
+        ViewGroup.LayoutParams params = new RelativeLayout.LayoutParams(200, 200);
+        if (descriptionView.getParent() != null)
+            removeView(descriptionView);
+        fragment.getActivity().addContentView(descriptionView, params);
+    }
+
+    public void removeView(AndroidDescriptionView descriptionView) {
+        fragment.removeView(descriptionView);
+    }
 }

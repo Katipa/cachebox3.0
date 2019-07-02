@@ -67,7 +67,7 @@ public class MenuBar extends Table {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
 
-                DrawablePickerDialog dlg = new DrawablePickerDialog(game, null, false, getStage());
+                DrawablePickerDialog dlg = new DrawablePickerDialog(game, null,-1, false, getStage());
                 dlg.show(game.screenMain.stage);
 
             }
@@ -147,6 +147,9 @@ public class MenuBar extends Table {
 
         });
 
+        CreateNightSkinButton buttonCreateNightSkin = new CreateNightSkinButton(game, game.skin);
+        add(buttonCreateNightSkin).pad(5);
+
         TextButton buttonValidate = new TextButton("Validate Skin", game.skin);
         buttonValidate.addListener(new ChangeListener() {
 
@@ -170,7 +173,7 @@ public class MenuBar extends Table {
 
 
     /*
-     * Show export dialog
+     * show export dialog
      */
     protected void showExportDialog() {
 

@@ -17,7 +17,10 @@ package de.longri.cachebox3.settings;
 
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.settings.types.*;
-import de.longri.cachebox3.utils.HSV_Color;
+
+import static de.longri.cachebox3.settings.types.SettingCategory.*;
+import static de.longri.cachebox3.settings.types.SettingStoreType.Global;
+import static de.longri.cachebox3.settings.types.SettingUsage.ACB;
 
 /**
  * Holds all skin relevant settings
@@ -26,19 +29,15 @@ import de.longri.cachebox3.utils.HSV_Color;
  */
 public abstract class Settings_Skin extends Settings_Map {
 
-    public static final SettingFolder SkinFolder = (SettingFolder) SettingsList.addSetting(new SettingFolder("SkinFolder", SettingCategory.Folder, DEVELOPER, CB.WorkPath + "/skins", SettingStoreType.Global, SettingUsage.ACB, false));
+    public static final SettingFolder SkinFolder = (SettingFolder) settingsList.addSetting(new SettingFolder("SkinFolder", Skin, NEVER, CB.WorkPath + "/skins", Global, ACB, false));
+    public static final SettingBool nightMode = (SettingBool) settingsList.addSetting(new SettingBool("nightMode", Skin, NEVER, false, Global, ACB));
+    public static final SettingString daySkinName = (SettingString) settingsList.addSetting(new SettingString("daySkinName", Skin, NEVER, "internalDefault", Global, ACB));
+    public static final SettingString nightSkinName = (SettingString) settingsList.addSetting(new SettingString("nightSkinName", Skin, NEVER, "internalNight", Global, ACB));
 
-    public static final SettingBool nightMode = (SettingBool) SettingsList.addSetting(new SettingBool("nightMode", SettingCategory.Internal, NEVER, false, SettingStoreType.Global, SettingUsage.ACB));
-
-
-    public static final SettingString daySkinName = (SettingString) SettingsList.addSetting(new SettingString("daySkinName", SettingCategory.Skin, NORMAL, "internalDefault", SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingString nightSkinName = (SettingString) SettingsList.addSetting(new SettingString("nightSkinName", SettingCategory.Skin, NORMAL, "internalNight", SettingStoreType.Global, SettingUsage.ACB));
-
-
-    public static final SettingBool useMipMap = (SettingBool) SettingsList.addSetting(new SettingBool("useMipMap", SettingCategory.Skin, EXPERT, false, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingBool dontUseAmbient = (SettingBool) SettingsList.addSetting(new SettingBool("dontUseAmbient", SettingCategory.Skin, EXPERT, true, SettingStoreType.Global, SettingUsage.ACB));
-    public static final SettingInt ambientTime = (SettingInt) SettingsList.addSetting(new SettingInt("ambientTime", SettingCategory.Skin, EXPERT, 10, SettingStoreType.Global, SettingUsage.ACB));
-
-    public static final SettingColor SolvedMysteryColor = (SettingColor) SettingsList.addSetting(new SettingColor("SolvedMysteryColor", SettingCategory.Skin, EXPERT, new HSV_Color(0.2f, 1f, 0.2f, 1f), SettingStoreType.Global, SettingUsage.ACB));
+//    public static final SettingBool useMipMap = (SettingBool) settingsList.addSetting(new SettingBool("useMipMap", Skin, EXPERT, false, Global, ACB));
+//    public static final SettingBool dontUseAmbient = (SettingBool) settingsList.addSetting(new SettingBool("dontUseAmbient", Skin, EXPERT, true, Global, ACB));
+//    public static final SettingInt ambientTime = (SettingInt) settingsList.addSetting(new SettingInt("ambientTime", Skin, EXPERT, 10, Global, ACB));
+//
+//    public static final SettingColor SolvedMysteryColor = (SettingColor) settingsList.addSetting(new SettingColor("SolvedMysteryColor", Skin, EXPERT, new HSV_Color(0.2f, 1f, 0.2f, 1f), Global, ACB));
 
 }

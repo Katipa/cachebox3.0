@@ -15,25 +15,32 @@
  */
 package de.longri.cachebox3.settings;
 
-import de.longri.cachebox3.logging.Logger;
-import de.longri.cachebox3.logging.LoggerFactory;
-import de.longri.cachebox3.settings.types.PlatformSettings;
-import de.longri.cachebox3.settings.types.SettingEncryptedString;
-import de.longri.cachebox3.settings.types.SettingStoreType;
-import de.longri.cachebox3.settings.types.SettingString;
-import de.longri.cachebox3.settings.types.SettingsList;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.ObjectMap;
+import de.longri.cachebox3.CB;
+import de.longri.cachebox3.settings.types.*;
 import de.longri.cachebox3.sqlite.Database;
+import de.longri.cachebox3.utils.NamedRunnable;
+import de.longri.gdx.sqlite.GdxSqlite;
+import de.longri.gdx.sqlite.GdxSqlitePreparedStatement;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by Longri on 02.08.16.
  */
 public class Config extends Settings {
     static final Logger log = LoggerFactory.getLogger(Config.class);
+    static final AtomicBoolean inWrite = new AtomicBoolean(false);
 
     public static void AcceptChanges() {
-        WriteToDB();
+        if (settingsList.dirtyList.size > 0)
+            writeToDB();
+        else
+            log.debug("no Setting are dirty, don't write to DB");
     }
 
     /**
@@ -41,156 +48,263 @@ public class Config extends Settings {
      *
      * @return
      */
-    public static boolean WriteToDB() {
-        // Write into DB
-        de.longri.cachebox3.settings.types.SettingsDAO dao = new de.longri.cachebox3.settings.types.SettingsDAO();
+    private static synchronized boolean writeToDB() {
+        if (inWrite.get()) {
+            log.warn("Config is in write state, can't run again! try again at 1 sec");
 
-        Database Data = Database.Data;
-        Database SettingsDB = Database.Settings;
-
-        try {
-            if (Data != null)
-                Data.beginTransaction();
-        } catch (Exception ex) {
-            // do not change Data now!
-            Data = null;
-        }
-
-        SettingsDB.beginTransaction();
-
-        boolean needRestart = false;
-
-        try {
-            for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = de.longri.cachebox3.settings.types.SettingsList.that.iterator(); it.hasNext(); ) {
-                de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
-                if (!setting.isDirty())
-                    continue; // is not changed -> do not
-
-                if (de.longri.cachebox3.settings.types.SettingStoreType.Local == setting.getStoreType()) {
-                    if (Data != null)
-                        dao.WriteToDatabase(Data, setting);
-                } else if (de.longri.cachebox3.settings.types.SettingStoreType.Global == setting.getStoreType() || (!de.longri.cachebox3.settings.types.PlatformSettings.canUsePlatformSettings() && de.longri.cachebox3.settings.types.SettingStoreType.Platform == setting.getStoreType())) {
-                    dao.WriteToDatabase(SettingsDB, setting);
-                } else if (de.longri.cachebox3.settings.types.SettingStoreType.Platform == setting.getStoreType()) {
-                    dao.WriteToPlatformSettings(setting);
-                    dao.WriteToDatabase(SettingsDB, setting);
-                }
-
-                if (setting.needRestart()) {
-                    needRestart = true;
-                }
-
-                setting.clearDirty();
-
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-            if (Data != null)
-                Data.setTransactionSuccessful();
-            SettingsDB.setTransactionSuccessful();
-
-            return needRestart;
-        } finally {
-            SettingsDB.endTransaction();
-            if (Data != null)
-                Data.endTransaction();
+            if (inWrite.get()) {
+                log.warn("Config is in write state, can't run again!");
+                return false;
+            }
         }
+        log.debug("Start write Config to DB!");
+        log.debug("Set Config in write to true");
+        inWrite.set(true);
+        final Array<SettingBase<?>> dirtyList = new Array<>();
+        while (settingsList.dirtyList.size > 0) {
+            SettingBase<?> setting = settingsList.dirtyList.pop();
+            setting.fireChangedEvent();
+            dirtyList.add(setting);
+        }
+
+        log.debug("Start writing {} settings changed", dirtyList.size);
+
+        try {
+            // Write into DB
+
+            final Database data = Database.Data;
+            final Database settingsDB = Database.Settings;
+
+
+            //splitt into local and global list!
+            final Array<SettingBase<?>> localList = new Array<>();
+            final Array<SettingBase<?>> globalList = new Array<>();
+            boolean isAPI = false;
+            while (dirtyList.size > 0) {
+                SettingBase<?> setting = dirtyList.pop();
+                if (setting.name.equals("AccessTokenForTest") || setting.name.equals("GcAPI")) {
+                    isAPI = true;
+                }
+                if (setting.getStoreType() == SettingStoreType.Local) {
+                    localList.add(setting);
+                } else {
+                    globalList.add(setting);
+                }
+            }
+
+            final AtomicBoolean WAITLOCAL = new AtomicBoolean(true);
+            final AtomicBoolean WAITGLOBAL = new AtomicBoolean(true);
+
+
+            if (localList.size > 0) {
+                if (!(data == null || !data.isStarted())) {
+                    log.debug("Start Async writing Config to local");
+                    CB.postAsync(new NamedRunnable("write settings local") {
+                        @Override
+                        public void run() {
+                            writeToDB(data, localList, WAITLOCAL);
+                        }
+                    });
+                } else {
+                    log.warn("Can't write local Config, DB's not started");
+                    WAITLOCAL.set(false);
+                }
+            } else {
+                WAITLOCAL.set(false);
+            }
+
+            if (globalList.size > 0) {
+                if (!(settingsDB == null || !settingsDB.isStarted())) {
+                    log.debug("Start Async writing Config to global");
+                    CB.postAsync(new NamedRunnable("write settings global") {
+                        @Override
+                        public void run() {
+                            writeToDB(settingsDB, globalList, WAITGLOBAL);
+                        }
+                    });
+                } else {
+                    log.warn("Can't write global Config, DB's not started");
+                    WAITGLOBAL.set(false);
+                }
+            } else {
+                WAITGLOBAL.set(false);
+            }
+
+            while (WAITGLOBAL.get() || WAITLOCAL.get()) {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error on store Config", e);
+        } finally {
+            log.debug("Set Config in write to false");
+            inWrite.set(false);
+        }
+        return false;
 
     }
 
-    public static void ReadFromDB() {
-        Database Data = Database.Data;
-        Database SettingsDB = Database.Settings;
-        // Read from DB
+    private static void writeToDB(Database db, Array<SettingBase<?>> settingsList, AtomicBoolean wait) {
+        if (settingsList != null && settingsList.size > 0) {
+            final GdxSqlitePreparedStatement deleteStatement = db.myDB.prepare("DELETE FROM Config WHERE [Key] = ?;");
+            final GdxSqlitePreparedStatement insertStatement = db.myDB.prepare("REPLACE INTO Config VALUES(?,?,?,?,?) ;");
 
-        de.longri.cachebox3.settings.types.SettingsDAO dao = new de.longri.cachebox3.settings.types.SettingsDAO();
-        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = de.longri.cachebox3.settings.types.SettingsList.that.iterator(); it.hasNext(); ) {
-            de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
-            String debugString;
-
-            boolean isPlatform = false;
-            boolean isPlattformoverride = false;
-
-            if (de.longri.cachebox3.settings.types.SettingStoreType.Local == setting.getStoreType()) {
-                if (Data == null)
-                    setting.loadDefault();
-                else
-                    setting = dao.ReadFromDatabase(Data, setting);
-            } else if (de.longri.cachebox3.settings.types.SettingStoreType.Global == setting.getStoreType() || (!PlatformSettings.canUsePlatformSettings() && de.longri.cachebox3.settings.types.SettingStoreType.Platform == setting.getStoreType())) {
-                setting = dao.ReadFromDatabase(SettingsDB, setting);
-            } else if (SettingStoreType.Platform == setting.getStoreType()) {
-                isPlatform = true;
-                de.longri.cachebox3.settings.types.SettingBase<?> cpy = setting.copy();
-                cpy = dao.ReadFromDatabase(SettingsDB, cpy);
-                setting = dao.ReadFromPlatformSetting(setting);
-
-                // chk for Value on User.db3 and cleared Platform Value
-
-                if (setting instanceof de.longri.cachebox3.settings.types.SettingString) {
-                    de.longri.cachebox3.settings.types.SettingString st = (SettingString) setting;
-
-                    if (st.getValue().length() == 0) {
-                        // Platform Settings are empty use db3 value or default
-                        setting = dao.ReadFromDatabase(SettingsDB, setting);
-                        dao.WriteToPlatformSettings(setting);
-                    }
-                } else if (!cpy.getValue().equals(setting.getValue())) {
-                    if (setting.getValue().equals(setting.getDefaultValue())) {
-                        // override Platformsettings with UserDBSettings
-                        setting.setValueFrom(cpy);
-                        dao.WriteToPlatformSettings(setting);
-                        setting.clearDirty();
-                        isPlattformoverride = true;
+            db.myDB.beginTransaction();
+            while (settingsList.size > 0) {
+                SettingBase<?> setting = settingsList.pop();
+                try {
+                    if (setting.isDefault()) {
+                        deleteStatement.bind(setting.getName()).commit().reset();
                     } else {
-                        // override UserDBSettings with Platformsettings
-                        cpy.setValueFrom(setting);
-                        dao.WriteToDatabase(SettingsDB, cpy);
-                        cpy.clearDirty();
+
+                        if (setting instanceof SettingsBlob) {
+                            insertStatement.bind(setting.getName(), null, null
+                                    , Long.toString(setting.expiredTime), setting.toDbValue()).commit().reset();
+                        } else if (setting instanceof SettingLongString || setting instanceof SettingStringList) {
+                            insertStatement.bind(setting.getName(), null, setting.toDbValue()
+                                    , Long.toString(setting.expiredTime)).commit().reset();
+                        } else {
+                            insertStatement.bind(setting.getName(), setting.toDbValue(), null
+                                    , Long.toString(setting.expiredTime)).commit().reset();
+                        }
                     }
+                } catch (Exception e) {
+                    log.error("Store Setting", e);
                 }
             }
-
-            if (setting instanceof SettingEncryptedString) {// Don't write encrypted settings in to a log file
-                debugString = "*******";
-            } else {
-                debugString = setting.getValue().toString();
-            }
-
-            if (isPlatform) {
-                if (isPlattformoverride) {
-                    log.debug("Override Platform setting [" + setting.name + "] from DB to: " + debugString);
-                } else {
-                    log.debug("Override PlatformDB setting [" + setting.name + "] from Platform to: " + debugString);
-                }
-            } else {
-                if (!setting.getValue().equals(setting.getDefaultValue())) {
-                    log.debug("Change " + setting.getStoreType() + " setting [" + setting.name + "] to: " + debugString);
-                } else {
-                    log.debug("Default " + setting.getStoreType() + " setting [" + setting.name + "] to: " + debugString);
-                }
-            }
+            db.myDB.endTransaction();
+            deleteStatement.close();
+            insertStatement.close();
         }
-        log.debug("Settings are loaded");
+        wait.set(false);
+    }
+
+    public static void readFromDB(boolean wait) {
+        CB.postOnGlThread(new NamedRunnable("Config") {
+            @Override
+            public void run() {
+                Database data = Database.Data;
+                Database settingsDB = Database.Settings;
+                // Read from DB
+
+                //load all config entries hold in DB
+                final ObjectMap<String, DbSettingValues> localMap = new ObjectMap<>();
+                final ObjectMap<String, DbSettingValues> globalMap = new ObjectMap<>();
+
+                if (data != null) {
+                    data.myDB.rawQuery("SELECT * FROM Config", new GdxSqlite.RowCallback() {
+                        @Override
+                        public void newRow(String[] columnName, Object[] value, int[] types) {
+                            String key = (String) value[0];
+                            DbSettingValues values = new DbSettingValues();
+                            values.value = (String) value[1];
+                            values.longString = (String) value[2];
+                            values.desired = (String) value[3];
+                            if (value.length > 4) values.blob = (byte[]) value[4];
+                            localMap.put(key, values);
+                        }
+                    });
+                }
+
+                if (settingsDB != null) {
+                    settingsDB.myDB.rawQuery("SELECT * FROM Config", new GdxSqlite.RowCallback() {
+                        @Override
+                        public void newRow(String[] columnName, Object[] value, int[] types) {
+                            String key = (String) value[0];
+                            DbSettingValues values = new DbSettingValues();
+                            values.value = (String) value[1];
+                            values.longString = (String) value[2];
+                            values.desired = (String) value[3];
+                            if (value.length > 4) values.blob = (byte[]) value[4];
+                            globalMap.put(key, values);
+                        }
+                    });
+                }
+
+
+                for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = settingsList.iterator(); it.hasNext(); ) {
+                    de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
+
+
+                    if (de.longri.cachebox3.settings.types.SettingStoreType.Local == setting.getStoreType()) {
+                        if (data == null)
+                            setting.loadDefault();
+                        else {
+                            DbSettingValues values = localMap.get(setting.name);
+                            if (values == null) {
+                                setting.loadDefault();
+                            } else {
+                                setting.fromDbvalue(values.blob != null ? values.blob :
+                                        (values.longString == null ? values.value : values.longString));
+                            }
+                        }
+                    } else if (de.longri.cachebox3.settings.types.SettingStoreType.Global == setting.getStoreType()) {
+                        DbSettingValues values = globalMap.get(setting.name);
+                        if (values == null) {
+                            setting.loadDefault();
+                        } else {
+                            setting.fromDbvalue(values.blob != null ? values.blob :
+                                    (values.longString == null ? values.value : values.longString));
+                        }
+                    }
+
+                    if (!setting.isDefault()) {
+                        String debugString;
+                        if (setting instanceof SettingEncryptedString) {// Don't write encrypted settings in to a log file
+                            debugString = "*******";
+                        } else {
+                            debugString = setting.getValue().toString();
+                        }
+                        log.debug("Change " + setting.getStoreType() + " setting [" + setting.name + "] to: " + debugString);
+                    }
+
+                }
+                log.debug("Settings are loaded");
+            }
+        }, wait);
     }
 
     public static void LoadFromLastValue() {
-        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = de.longri.cachebox3.settings.types.SettingsList.that.iterator(); it.hasNext(); ) {
+        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = settingsList.iterator(); it.hasNext(); ) {
             de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
             setting.loadFromLastValue();
         }
     }
 
     public static void SaveToLastValue() {
-        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = de.longri.cachebox3.settings.types.SettingsList.that.iterator(); it.hasNext(); ) {
+        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = settingsList.iterator(); it.hasNext(); ) {
             de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
             setting.saveToLastValue();
         }
     }
 
     public static void LoadAllDefaultValues() {
-        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = SettingsList.that.iterator(); it.hasNext(); ) {
+        for (Iterator<de.longri.cachebox3.settings.types.SettingBase<?>> it = settingsList.iterator(); it.hasNext(); ) {
             de.longri.cachebox3.settings.types.SettingBase<?> setting = it.next();
             setting.loadDefault();
         }
     }
 
+
+    private static class DbSettingValues {
+//        CREATE TABLE Config (
+//            [Key]      NVARCHAR (30)  NOT NULL,
+//            Value      NVARCHAR (255),
+//            LongString NTEXT,
+//            desired    NTEXT
+//        );
+
+        private String value, longString, desired;
+        private byte[] blob;
+
+    }
 
 }
