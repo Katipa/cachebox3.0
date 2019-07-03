@@ -21,7 +21,7 @@ package de.longri.cachebox3.desktop.touch;
 public class MouseLauncher {
     public static void main(String[] args) {
         //redirect to new Lwjgl3 version on namespace com.badlogic.gdx.backends.lwjgl3
-        com.badlogic.gdx.backends.lwjgl3.TouchLwjgl3Launcher.main(args);
+        com.badlogic.gdx.backends.lwjgl3.MouseLwjgl3Launcher.main(args);
         System.exit(0);
     }
 }
