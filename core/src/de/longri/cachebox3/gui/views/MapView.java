@@ -28,11 +28,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.utils.Array;
 import com.badlogic.gdx.utils.Disposable;
 import com.badlogic.gdx.utils.ObjectMap;
+import com.badlogic.gdx.utils.XmlStreamParser;
 import com.kotcrab.vis.ui.VisUI;
 import com.kotcrab.vis.ui.widget.VisTable;
-import com.thebuzzmedia.sjxp.XMLParser;
-import com.thebuzzmedia.sjxp.rule.DefaultRule;
-import com.thebuzzmedia.sjxp.rule.IRule;
 import de.longri.cachebox3.CB;
 import de.longri.cachebox3.CacheboxMain;
 import de.longri.cachebox3.events.EventHandler;
@@ -72,8 +70,10 @@ import de.longri.cachebox3.locator.track.TrackRecorder;
 import de.longri.cachebox3.settings.Config;
 import de.longri.cachebox3.settings.Settings_Map;
 import de.longri.cachebox3.settings.types.SettingBool;
+import de.longri.cachebox3.translation.Language;
 import de.longri.cachebox3.types.AbstractCache;
 import de.longri.cachebox3.types.AbstractWaypoint;
+import de.longri.cachebox3.utils.CharSequenceUtil;
 import de.longri.cachebox3.utils.IChanged;
 import de.longri.cachebox3.utils.NamedRunnable;
 import de.longri.cachebox3.utils.UnZip;
@@ -112,9 +112,9 @@ import org.oscim.utils.TextureAtlasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 
@@ -127,6 +127,7 @@ public class MapView extends AbstractView {
     private final static Logger log = LoggerFactory.getLogger(MapView.class);
 
     private static double lastCenterPosLat, lastCenterPosLon;
+    static private MapState actMapState = new MapState();
     private final Event selfEvent = new Event();
     /*
     private final OnItemClickListener styleItemClickListener = item -> {
@@ -171,7 +172,6 @@ public class MapView extends AbstractView {
     private LocationTextureLayer myLocationLayer;
     private MapViewPositionChangedHandler positionChangedHandler;
     private Point screenPoint = new Point();
-    private Menu mapViewThemeMenu;
     private String themesPath;
     private FZKThemesInfo fzkThemesInfo;
     private Array<FZKThemesInfo> fzkThemesInfoList = new Array<>();
@@ -215,7 +215,6 @@ public class MapView extends AbstractView {
     };
     private CB.ThemeIsFor whichCase;
 
-
     public MapView(BitStore reader) {
         super(reader);
         whichCase = CB.ThemeIsFor.day;
@@ -226,6 +225,10 @@ public class MapView extends AbstractView {
         super("MapView");
         whichCase = CB.ThemeIsFor.day;
         create();
+    }
+
+    public static boolean isCarMode() {
+        return actMapState.getMapMode() == MapMode.CAR;
     }
 
     public static Coordinate getLastCenterPos() {
@@ -271,6 +274,10 @@ public class MapView extends AbstractView {
         return textureRegionMap;
     }
 
+    public MapState getActMapState() {
+        return actMapState;
+    }
+
     @Override
     protected void create() {
         this.setTouchable(Touchable.disabled);
@@ -284,13 +291,13 @@ public class MapView extends AbstractView {
             public void stateChanged(MapMode mapMode, MapMode lastMapMode, Event event) {
 
                 MapPosition mapPosition = cacheboxMapAdapter.getMapPosition();
-                CB.actMapState.setPosition(new LatLong(mapPosition.getLatitude(), mapPosition.getLongitude()));
-                CB.actMapState.setMapMode(mapMode);
-                CB.actMapState.setOrientation(mapPosition.bearing);
-                CB.actMapState.setTilt(mapPosition.tilt);
-                CB.actMapState.setMapOrientationMode(infoPanel.getOrientationState());
+                actMapState.setPosition(new LatLong(mapPosition.getLatitude(), mapPosition.getLongitude()));
+                actMapState.setMapMode(mapMode);
+                actMapState.setOrientation(mapPosition.bearing);
+                actMapState.setTilt(mapPosition.tilt);
+                actMapState.setMapOrientationMode(infoPanel.getOrientationState());
 
-                log.debug("Map state changed to:" + CB.actMapState);
+                log.debug("Map state changed to:" + actMapState);
 
                 if (mapMode == MapMode.CAR) {
                     storeMapstate(mapMode, lastMapMode);
@@ -351,7 +358,7 @@ public class MapView extends AbstractView {
         infoPanel.setBounds(10, 100, 200, 100);
         this.addActor(infoPanel);
 
-        cacheboxMapAdapter = createMap();
+        createCacheboxMapAdapter();
 
         this.addActor(mapStateButton);
         this.setTouchable(Touchable.enabled);
@@ -427,15 +434,16 @@ public class MapView extends AbstractView {
         }
     }
 
-    private CacheboxMapAdapter createMap() {
+    private void createCacheboxMapAdapter() {
 
-        if (CB.isMocked()) return null;
+        if (CB.isMocked()) return;
 
         log.debug("Tile.SIZE:" + Integer.toString(Tile.SIZE));
         log.debug("Canvas.dpi:" + Float.toString(CanvasAdapter.dpi));
 
 
         CacheboxMain.drawMap.set(true);
+
         cacheboxMapAdapter = new CacheboxMapAdapter() {
 
             @Override
@@ -478,7 +486,7 @@ public class MapView extends AbstractView {
         //add position changed handler
         positionChangedHandler = new MapViewPositionChangedHandler(cacheboxMapAdapter, directLineLayer, myLocationLayer, infoPanel);
 
-        return cacheboxMapAdapter;
+        return;
     }
 
     @Override
@@ -886,14 +894,13 @@ public class MapView extends AbstractView {
     }
 
     private void showMapViewThemeMenu() {
-        mapViewThemeMenu = new Menu("MapViewThemeMenuTitle");
+        Menu mapViewThemeMenu = new Menu("MapViewThemeMenuTitle");
         //add default themes
         for (VtmThemes vtmTheme : VtmThemes.values()) {
             mapViewThemeMenu.addCheckableMenuItem("", vtmTheme.name(), null, vtmTheme.equals(CB.getCurrentTheme()),
                     () -> {
                         CB.setCurrentTheme(whichCase);
                         cacheboxMapAdapter.setTheme(CB.getCurrentTheme());
-                        // todo just save to config or load with defaults?
                     });
         }
 
@@ -943,32 +950,33 @@ public class MapView extends AbstractView {
                             }
                         }
                     });
+            mapViewThemeMenu.addMenuItem("Download", "\n Freizeitkarte",
+                    CB.getSkin().getMenuIcon.baseMapFreizeitkarte, () -> showFZKDownloadMenu());
         }
-
-        addDownloadFZKRenderThemes();
 
         mapViewThemeMenu.show();
     }
 
-    private void addDownloadFZKRenderThemes() {
+    private void showFZKDownloadMenu() {
+        Menu mapViewFZKDownloadMenu = new Menu("Download");
 
         if (fzkThemesInfoList.size == 0) {
-            String repository_freizeitkarte_android = Webb.create()
+            InputStream repository_freizeitkarte_android = null;
+            fzkThemesInfo = new FZKThemesInfo();
+
+            repository_freizeitkarte_android = Webb.create()
                     .get("http://repository.freizeitkarte-osm.de/repository_freizeitkarte_android.xml")
                     .readTimeout(Config.socket_timeout.getValue())
                     .ensureSuccess()
-                    .asString()
+                    .asStream()
                     .getBody();
-            java.util.Map<String, String> values = new HashMap<>();
-            System.setProperty("sjxp.namespaces", "false");
-            Array<IRule<java.util.Map<String, String>>> ruleList = createRepositoryRules(new Array<>());
-            XMLParser<java.util.Map<String, String>> parserCache = new XMLParser<>(ruleList.toArray(IRule.class));
-            parserCache.parse(new ByteArrayInputStream(repository_freizeitkarte_android.getBytes()), values);
+
+            fzkThemesInfoList = getMapInfoList(repository_freizeitkarte_android);
         }
 
         for (FZKThemesInfo fzkThemesInfo : fzkThemesInfoList) {
             // todo change to explicit clicklistener, if animation works
-            mapViewThemeMenu.addMenuItem("Download", "\n" + fzkThemesInfo.Description, CB.getSkin().getMenuIcon.baseMapFreizeitkarte, () -> {
+            mapViewFZKDownloadMenu.addMenuItem("Download", "\n" + fzkThemesInfo.Description, CB.getSkin().getMenuIcon.baseMapFreizeitkarte, () -> {
                 String zipFile = fzkThemesInfo.Url.substring(fzkThemesInfo.Url.lastIndexOf("/") + 1);
                 String target = themesPath + "/" + zipFile;
 
@@ -981,65 +989,73 @@ public class MapView extends AbstractView {
                 Gdx.files.absolute(target).delete();
             });
         }
+
+        mapViewFZKDownloadMenu.show();
     }
 
-    private Array<IRule<java.util.Map<String, String>>> createRepositoryRules(Array<IRule<java.util.Map<String, String>>> ruleList) {
-        ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/Name") {
+    public static Array<FZKThemesInfo> getMapInfoList(InputStream stream) {
+        final FZKThemesInfo[] info = {new FZKThemesInfo()};
+        final Array<FZKThemesInfo> list = new Array<>();
+
+        XmlStreamParser parser = new XmlStreamParser();
+        parser.registerDataHandler("/Freizeitkarte/Theme/Name", new XmlStreamParser.DataHandler() {
             @Override
-            public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                fzkThemesInfo.Name = text;
+            public void handleData(char[] data, int offset, int length) {
+                info[0].Name = new String(data, offset, length).trim();
             }
         });
-
-        if (Config.localisation.getValue().equals("de")) {
-            ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/DescriptionGerman") {
+        if (Config.localisation.getEnumValue() == Language.de) {
+            parser.registerDataHandler("/Freizeitkarte/Theme/DescriptionGerman", new XmlStreamParser.DataHandler() {
                 @Override
-                public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                    fzkThemesInfo.Description = text;
+                public void handleData(char[] data, int offset, int length) {
+                    info[0].Description = new String(data, offset, length).trim();
                 }
             });
         } else {
-            ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/DescriptionEnglish") {
+            parser.registerDataHandler("/Freizeitkarte/Theme/DescriptionEnglish", new XmlStreamParser.DataHandler() {
                 @Override
-                public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                    fzkThemesInfo.Description = text;
+                public void handleData(char[] data, int offset, int length) {
+                    info[0].Description = new String(data, offset, length).trim();
                 }
             });
         }
-
-        ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/Url") {
+        parser.registerDataHandler("/Freizeitkarte/Theme/Url", new XmlStreamParser.DataHandler() {
             @Override
-            public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                fzkThemesInfo.Url = text;
+            public void handleData(char[] data, int offset, int length) {
+                info[0].Url = new String(data, offset, length).trim();
             }
         });
 
-        ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/Size") {
+        parser.registerDataHandler("/Freizeitkarte/Theme/Size", new XmlStreamParser.DataHandler() {
             @Override
-            public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                fzkThemesInfo.Size = Integer.parseInt(text);
+            public void handleData(char[] data, int offset, int length) {
+                info[0].Size = CharSequenceUtil.parseInteger(data, offset, length);
+            }
+        });
+        // MD5 ignored
+
+
+        parser.registerEndTagHandler("/Freizeitkarte/Theme", new XmlStreamParser.EndTagHandler() {
+            @Override
+            protected void handleEndTag() {
+                list.add(info[0]);
+                info[0] = new FZKThemesInfo();
             }
         });
 
-        ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.CHARACTER, "/Freizeitkarte/Theme/Checksum") {
-            @Override
-            public void handleParsedCharacters(XMLParser<java.util.Map<String, String>> parser, String text, java.util.Map<String, String> values) {
-                fzkThemesInfo.MD5 = text;
+        try {
+            parser.parse(stream);
+        } finally {
+            try {
+                stream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-        });
-
-        ruleList.add(new DefaultRule<java.util.Map<String, String>>(IRule.Type.TAG, "/Freizeitkarte/Theme") {
-            @Override
-            public void handleTag(XMLParser<java.util.Map<String, String>> parser, boolean isStartTag, java.util.Map<String, String> values) {
-                if (isStartTag) {
-                    fzkThemesInfo = new FZKThemesInfo();
-                } else {
-                    fzkThemesInfoList.add(fzkThemesInfo);
-                }
-            }
-        });
-        return ruleList;
+        }
+        info[0] = null;
+        return list;
     }
+
 
     private void showMapViewThemeStyleMenu() {
         OptionMenu menuMapStyle = new OptionMenu("MapViewThemeStyleMenuTitle");
@@ -1052,6 +1068,7 @@ public class MapView extends AbstractView {
             // check, if saved for selected layer
             boolean isSelected = false;
             menuMapStyle.addCheckableMenuItem("", mapStyle, null, isSelected, () -> {
+
             });
         }
 
@@ -1170,7 +1187,6 @@ public class MapView extends AbstractView {
         });
     }
 
-
     private void setInfoBubblePos() {
         if (this.cacheboxMapAdapter != null && infoBubble != null && screenPoint != null) {
             this.cacheboxMapAdapter.viewport().toScreenPoint(infoBubble.getCoordX(), infoBubble.getCoordY(), screenPoint);
@@ -1189,7 +1205,7 @@ public class MapView extends AbstractView {
         cacheboxMapAdapter.setMapPosition(actPosition);
     }
 
-    private class FZKThemesInfo {
+    public static class FZKThemesInfo {
         public String Name;
         public String Description;
         public String Url;
